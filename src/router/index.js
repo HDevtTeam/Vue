@@ -153,21 +153,31 @@ router.beforeEach((to, from, next) => {
     const token = localStorage.getItem('token')
     console.log('当前token状态:', token ? '已存在' : '不存在')
     
-    // 从token中解析用户信息
+    // 从token中解析用户信息（支持演示账号）
     let userRole = null
-    
+    const DEMO_TOKEN = 'demo-admin-token'
+
     try {
       if (token) {
-        const payload = parseJwtToken(token);
-        userRole = payload.role;
-        console.log('从token解析的用户信息:', payload);
+        if (token === DEMO_TOKEN) {
+          const stored = localStorage.getItem('userInfo')
+          if (stored) {
+            try {
+              const info = JSON.parse(stored)
+              userRole = info.role || 'ADMIN'
+            } catch (e) {}
+          }
+          if (!userRole) userRole = 'ADMIN'
+        } else {
+          const payload = parseJwtToken(token)
+          userRole = payload.role
+        }
+        console.log('当前用户角色:', userRole)
       }
     } catch (error) {
-      console.error('解析token失败:', error);
-      // 出错时使用默认值继续
+      console.error('解析token失败:', error)
     }
     
-    console.log('当前用户角色:', userRole);
     // 未登录，且访问/
     if(!token && to.path === '/') {
       console.log('未登录，跳转到登录页')

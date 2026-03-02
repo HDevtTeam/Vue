@@ -86,49 +86,60 @@ const logout = async () => {
   }
 }
 
+// 演示账号 token，不请求后端校验
+const DEMO_TOKEN = 'demo-admin-token'
+
 // 验证登录状态
 const checkLoginStatus = async () => {
   console.log('开始验证登录状态')
   try {
-    // 首先尝试从localStorage获取并验证用户信息
-    const storedUserInfo = localStorage.getItem('userInfo')
     const token = localStorage.getItem('token')
-    
-    console.log('当前token状态:', token ? '存在' : '不存在')
-    
+
     if (!token) {
-      console.log('未找到token，设置为未登录状态')
       isLoggedIn.value = false
       return
     }
-    
-    // 验证token有效性
-    console.log('开始验证token有效性')
+
+    // 演示账号：不请求后端，直接使用 localStorage 中的用户信息
+    if (token === DEMO_TOKEN) {
+      const stored = localStorage.getItem('userInfo')
+      if (stored) {
+        try {
+          const info = JSON.parse(stored)
+          isLoggedIn.value = true
+          userInfo.value = {
+            name: info.name || '演示管理员',
+            role: info.role || 'ADMIN',
+            userName: info.userName || 'admin'
+          }
+        } catch (e) {
+          handleLoginExpired()
+        }
+      } else {
+        handleLoginExpired()
+      }
+      return
+    }
+
+    // 正式账号：请求后端校验 token
     const response = await request({
       url: '/token',
       method: 'post'
     })
-    
-    if (response && response.code === 200 && response.data) {
-      console.log('token验证成功，更新用户信息')
 
-      // 依据token更新登录状态和用户信息
+    if (response && response.code === 200 && response.data) {
       isLoggedIn.value = true
       userInfo.value = {
         name: response.data.name || '用户',
         role: response.data.role || '',
         userName: response.data.userName || ''
       }
-      
-      // 保存用户信息到本地存储
       try {
         localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
-        console.log('用户信息已保存到localStorage')
       } catch (storageError) {
         console.error('保存用户信息到localStorage失败:', storageError)
       }
     } else {
-      console.log('token验证失败，处理登录过期')
       handleLoginExpired()
     }
   } catch (error) {

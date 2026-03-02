@@ -35,6 +35,9 @@
             登录
           </el-button>
         </el-form-item>
+        <div class="demo-hint">
+          演示账号：admin / 123456（仅用于查看页面，不请求后端）
+        </div>
         <div class="register-link">
           还没有账号？
           <router-link to="/register">立即注册</router-link>
@@ -71,6 +74,11 @@ const loginRules = {
   ]
 }
 
+// 演示账号（仅用于本地查看页面样式，不请求后端）
+const DEMO_USERNAME = 'admin'
+const DEMO_PASSWORD = '123456'
+const DEMO_TOKEN = 'demo-admin-token'
+
 // 清空表单
 const resetForm = () => {
   if (loginFormRef.value) {
@@ -85,6 +93,16 @@ const handleLogin = async () => {
     await loginFormRef.value.validate()
     loading.value = true
 
+    // 演示账号：不请求后端，直接写入 token 和用户信息并跳转
+    if (loginForm.userName === DEMO_USERNAME && loginForm.password === DEMO_PASSWORD) {
+      localStorage.setItem('token', DEMO_TOKEN)
+      const demoUserInfo = { name: '演示管理员', role: 'ADMIN', userName: DEMO_USERNAME }
+      localStorage.setItem('userInfo', JSON.stringify(demoUserInfo))
+      ElMessage.success('登录成功（演示账号）')
+      router.push('/')
+      return
+    }
+
     const res = await request({
       url: '/login',
       method: 'post',
@@ -95,11 +113,9 @@ const handleLogin = async () => {
     })
 
     // 登录成功
-    const  token = res.data.token
+    const token = res.data.token
     localStorage.setItem('token', token)
-    
     ElMessage.success('登录成功')
-    
     router.push('/')
   } catch (error) {
     console.error('登录失败:', error)
@@ -155,6 +171,16 @@ onMounted(() => {
   width: 100%;
   padding: 12px 0;
   font-size: 16px;
+}
+
+.demo-hint {
+  text-align: center;
+  margin-top: 12px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #909399;
+  background: #f4f4f5;
+  border-radius: 6px;
 }
 
 .register-link {

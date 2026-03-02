@@ -121,7 +121,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import request from '../../utils/request'
+import request from '../utils/request'
 
 // 搜索表单数据
 const searchForm = ref({
