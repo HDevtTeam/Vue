@@ -98,7 +98,35 @@ const router = createRouter({
             requiresAuth: true,
             roles: ['ADMIN']
           }
-        }
+        },
+        {
+          path:'user-list',
+          name:'UserList',
+          component:()=>import('../views/liling/users.vue'),
+          meta:{
+            requiresAuth: true,
+            roles:['ADMIN']
+          }
+        },
+          // ⭐️ 新增：device 相关页面
+    {
+      path: 'device',  // /admin/device
+      name: 'DeviceList',
+      component: () => import('../views/admin/device/list.vue'),
+      meta: { requiresAuth: true, roles: ['ADMIN'] }
+    },
+    {
+      path: 'device/detail/:id',  // /admin/device/detail/DEV001
+      name: 'DeviceDetail',
+      component: () => import('../views/admin/device/detail.vue'),
+      meta: { requiresAuth: true, roles: ['ADMIN'] }
+    },
+    {
+      path: 'device/config/:id',  // /admin/device/config/DEV001
+      name: 'DeviceConfig',
+      component: () => import('../views/admin/device/config.vue'),
+      meta: { requiresAuth: true, roles: ['ADMIN'] }
+    }
       ]
     },
     {

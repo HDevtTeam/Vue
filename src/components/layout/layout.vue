@@ -204,14 +204,22 @@ onMounted(() => {
         </el-menu-item>
         
         <!-- 管理员菜单 -->
-        <el-sub-menu v-if="userInfo.role === 'ADMIN'" index="admin">
-          <template #title>
-            <el-icon><Setting /></el-icon>
-            <span>系统管理</span>
-          </template>
-          <el-menu-item index="admin-users">用户管理</el-menu-item>
-          <el-menu-item index="admin-system">系统配置</el-menu-item>
-        </el-sub-menu>
+<el-sub-menu v-if="userInfo.role === 'ADMIN'" index="admin">
+  <template #title>
+    <el-icon><Setting /></el-icon>
+    <span>系统管理</span>
+  </template>
+  <el-menu-item index="admin-users">用户管理</el-menu-item>
+  <el-menu-item index="admin-system">系统配置</el-menu-item>
+  <!-- ⭐️ 加上你的设备管理 -->
+  <el-menu-item index="admin-device">设备管理</el-menu-item>
+  <!-- 如果有子菜单还可以加 -->
+  <el-sub-menu index="admin-device-sub">
+    <template #title>设备管理</template>
+    <el-menu-item index="admin-device-list">设备列表</el-menu-item>
+    <el-menu-item index="admin-device-config">RTMP配置</el-menu-item>
+  </el-sub-menu>
+</el-sub-menu>
       </el-menu>
       <!-- 将折叠按钮移到底部 -->
       <div class="menu-footer">
