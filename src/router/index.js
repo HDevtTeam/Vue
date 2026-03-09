@@ -99,15 +99,7 @@ const router = createRouter({
             roles: ['ADMIN']
           }
         },
-        {
-          path:'user-list',
-          name:'UserList',
-          component:()=>import('../views/liling/users.vue'),
-          meta:{
-            requiresAuth: true,
-            roles:['ADMIN']
-          }
-        },
+      
           // ⭐️ 新增：device 相关页面
     {
       path: 'device',  // /admin/device

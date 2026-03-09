@@ -212,12 +212,12 @@ onMounted(() => {
   <el-menu-item index="admin-users">用户管理</el-menu-item>
   <el-menu-item index="admin-system">系统配置</el-menu-item>
   <!-- ⭐️ 加上你的设备管理 -->
-  <el-menu-item index="admin-device">设备管理</el-menu-item>
+
   <!-- 如果有子菜单还可以加 -->
-  <el-sub-menu index="admin-device-sub">
+  <el-sub-menu index="admin-device">
     <template #title>设备管理</template>
-    <el-menu-item index="admin-device-list">设备列表</el-menu-item>
-    <el-menu-item index="admin-device-config">RTMP配置</el-menu-item>
+    <el-menu-item index="admin-device">设备列表</el-menu-item>
+    
   </el-sub-menu>
 </el-sub-menu>
       </el-menu>
