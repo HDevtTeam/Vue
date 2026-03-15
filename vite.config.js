@@ -11,11 +11,13 @@ export default defineConfig({
     }
     },  // 使用 vue 插件
   server: {
+    port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://118.145.239.110:5411',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
+      //  rewrite: (path) => path.replace(/^\/api/, '')
+      
       }
     }
   }

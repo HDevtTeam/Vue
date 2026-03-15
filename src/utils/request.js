@@ -4,18 +4,17 @@ import router from '../router'
 
 // 创建axios实例
 const service = axios.create({
-  baseURL: 'http://localhost:8080',
-  timeout: 10000 // 请求超时时间
+  baseURL: '/api',
+  timeout: 10000
 })
 
-// 请求拦截器
+// 请求拦截器（发请求时带上token）
 service.interceptors.request.use(
   config => {
-    // 从localStorage获取token
     const token = localStorage.getItem('token')
     if (token) {
-      // 设置请求头携带token
-      config.headers.Authorization = `Bearer ${token}`
+      // 把token放在请求头的token字段里（不是Authorization）
+      config.headers['token'] = token
     }
     return config
   },
@@ -25,30 +24,35 @@ service.interceptors.request.use(
   }
 )
 
-// 响应拦截器
+// 响应拦截器（处理响应）
 service.interceptors.response.use(
   response => {
+    // 登录成功后，从响应头里拿token
+    const token = response.headers['token']
+    if (token) {
+      localStorage.setItem('token', token)
+    }
+
     const res = response.data
+    const code = res?.code ?? res?.commonResultResponse?.code
+    const msg = res?.msg ?? res?.message ?? res?.commonResultResponse?.message
     
     // 如果返回的状态码不是200，说明接口请求失败
-    if (res.code !== 200) {
-      if (res.code === 401 && router.currentRoute.value.path === '/login') {
+    if (code !== 200) {
+      if (code === 401 && router.currentRoute.value.path === '/login') {
         ElMessage.error('账号或密码错误')
       } else {
-        ElMessage.error(res.msg || '请求失败')
+        ElMessage.error(msg || '请求失败')
       }
       
       // 401: 未登录或token过期
-      if (res.code === 401) {
-        // 清除本地token
+      if (code === 401) {
         localStorage.removeItem('token')
         localStorage.removeItem('userInfo')
-        
-        // 跳转到登录页
         router.replace('/login')
       }
       
-      return Promise.reject(new Error(res.msg || '请求失败'))
+      return Promise.reject(new Error(msg || '请求失败'))
     } else {
       return res
     }
@@ -56,7 +60,6 @@ service.interceptors.response.use(
   error => {
     console.error('响应错误:', error)
     
-    // 处理401错误
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('token')
       localStorage.removeItem('userInfo')
@@ -68,7 +71,6 @@ service.interceptors.response.use(
         router.replace('/login')
       }
     } else {
-      // 其他错误
       ElMessage.error(error.response?.data?.msg || '服务器异常，请稍后重试')
     }
     
