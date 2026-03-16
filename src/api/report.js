@@ -32,9 +32,9 @@ export const createExportTask = (data) => {
 // 4. 下载导出文件
 export const downloadFile = (fileName) => {
   return request({
-    url: `/chart/download/${fileName}`,
+    url: `/chart/download/${encodeURIComponent(fileName)}`,
     method: 'get',
-    responseType: 'blob'  // 文件流
+    responseType: 'blob'
   })
 }
 

@@ -103,7 +103,7 @@ const handleRegister = async () => {
     loading.value = true
 
     await request({
-      //url: '/api/register',  // 注册接口
+      //url: '/register',  // 注册接口
       url: '/register',  // 注册接口
       method: 'post',
       data: {

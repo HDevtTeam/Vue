@@ -11,10 +11,21 @@ const service = axios.create({
 // 请求拦截器（发请求时带上token）
 service.interceptors.request.use(
   config => {
+    // 登录、注册接口不携带 token
+    const url = config.url || ''
+    if (/^\/(login|register)/.test(url)) {
+      return config
+    }
+
     const token = localStorage.getItem('token')
     if (token) {
-      // 把token放在请求头的token字段里（不是Authorization）
-      config.headers['token'] = token
+      // 仅当 token 为纯 ASCII（JWT 标准）时添加，避免非 ISO-8859-1 字符导致 setRequestHeader 报错
+      if (/^[\x00-\x7F]*$/.test(token)) {
+        config.headers['token'] = token
+      } else {
+        localStorage.removeItem('token')
+        localStorage.removeItem('userInfo')
+      }
     }
     return config
   },
@@ -34,11 +45,30 @@ service.interceptors.response.use(
     }
 
     const res = response.data
+    // blob 响应（如下载文件）直接返回，不解析 JSON
+    if (response.config.responseType === 'blob') {
+      return res
+    }
     const code = res?.code ?? res?.commonResultResponse?.code
     const msg = res?.msg ?? res?.message ?? res?.commonResultResponse?.message
-    
-    // 如果返回的状态码不是200，说明接口请求失败
-    if (code !== 200) {
+
+    // 图表接口等返回 ChartDataResponse，无 code 字段，有 chartData/chartType 即视为成功
+    if (code === undefined && (res?.chartData != null || res?.chartType != null)) {
+      return res
+    }
+
+    // 部分接口用 code: 0 表示成功（如导出任务）
+    if (code === 200 || code === 0) {
+      return res
+    }
+
+    // 导出任务接口：返回 taskId 或 status 即视为成功
+    if (code === undefined && (res?.taskId != null || res?.status != null)) {
+      return res
+    }
+
+    // 如果返回的状态码不是200/0，说明接口请求失败
+    if (code !== 200 && code !== 0) {
       if (code === 401 && router.currentRoute.value.path === '/login') {
         ElMessage.error('账号或密码错误')
       } else {
@@ -53,9 +83,8 @@ service.interceptors.response.use(
       }
       
       return Promise.reject(new Error(msg || '请求失败'))
-    } else {
-      return res
     }
+    return res
   },
   error => {
     console.error('响应错误:', error)

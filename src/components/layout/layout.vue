@@ -86,7 +86,6 @@ const logout = async () => {
   }
 }
 
-// 演示账号 token，不请求后端校验
 const DEMO_TOKEN = 'demo-admin-token'
 
 // 验证登录状态
@@ -121,27 +120,24 @@ const checkLoginStatus = async () => {
       return
     }
 
-    // 正式账号：请求后端校验 token
-    const response = await request({
-      url: '/token',
-      method: 'post'
-    })
-
-    if (response && response.code === 200 && response.data) {
-      isLoggedIn.value = true
-      userInfo.value = {
-        name: response.data.name || '用户',
-        role: response.data.role || '',
-        userName: response.data.userName || ''
-      }
+    // 正式账号：有 token 就认为已登录，不需要请求后端验证
+    isLoggedIn.value = true
+    const stored = localStorage.getItem('userInfo')
+    if (stored) {
       try {
-        localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
-      } catch (storageError) {
-        console.error('保存用户信息到localStorage失败:', storageError)
+        const info = JSON.parse(stored)
+        userInfo.value = {
+          name: info.name || '用户',
+          role: (info.role || 'ADMIN').toString().toUpperCase(),
+          userName: info.userName || ''
+        }
+      } catch (e) {
+        userInfo.value = { name: '用户', role: 'ADMIN', userName: '' }
       }
     } else {
-      handleLoginExpired()
+      userInfo.value = { name: '用户', role: 'ADMIN', userName: '' }
     }
+
   } catch (error) {
     console.error('验证登录状态失败:', error)
     handleLoginExpired()
@@ -202,6 +198,12 @@ onMounted(() => {
           <el-icon><DataLine /></el-icon>
           <template #title>数据分析</template>
         </el-menu-item>
+        <!-- 所有认证用户可见 -->
+        <el-menu-item index="reports">
+          <el-icon><DataLine /></el-icon>
+          <template #title>统计报表</template>
+        </el-menu-item>
+      
         
         <!-- 管理员菜单 -->
 <el-sub-menu v-if="userInfo.role === 'ADMIN'" index="admin">
@@ -211,6 +213,7 @@ onMounted(() => {
   </template>
   <el-menu-item index="admin-users">用户管理</el-menu-item>
   <el-menu-item index="admin-system">系统配置</el-menu-item>
+  <el-menu-item index="admin-orgnization">组织管理</el-menu-item>
   <!-- ⭐️ 加上你的设备管理 -->
 
   <!-- 如果有子菜单还可以加 -->
@@ -271,7 +274,7 @@ onMounted(() => {
 }
 
 .aside {
-  background-color: #304156;
+  background-color: #c5e8e4;
   transition: width 0.3s;
   overflow: hidden;
   display: flex;
@@ -284,7 +287,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-top: 1px solid #1f2d3d;
+  border-top: 1px solid #a9e8e5;
 }
 
 .toggle-button {
@@ -321,7 +324,7 @@ onMounted(() => {
 .system-title {
   margin: 0;
   font-size: 24px;
-  color: #303133;
+  color: #ca2c2f;
   font-weight: bold;
   font-family: 'Arial Black', 'Arial Bold', Gadget, sans-serif;
   text-align: center;
@@ -359,7 +362,7 @@ onMounted(() => {
 
 /* 深度选择器，修改Element Plus的默认样式 */
 :deep(.el-menu) {
-  background-color: #304156;
+  background-color: #6391c8;
 }
 
 :deep(.el-menu-item) {

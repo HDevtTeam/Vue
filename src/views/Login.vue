@@ -9,9 +9,9 @@
         class="login-form"
         @keyup.enter="handleLogin"
       >
-        <el-form-item prop="userName">
+        <el-form-item prop="name">
           <el-input
-            v-model="loginForm.userName"
+            v-model="loginForm.name"
             placeholder="请输入账号"
             prefix-icon="User"
           />
@@ -35,9 +35,6 @@
             登录
           </el-button>
         </el-form-item>
-        <div class="demo-hint">
-          演示账号：admin / 123456（仅用于查看页面，不请求后端）
-        </div>
         <div class="register-link">
           还没有账号？
           <router-link to="/register">立即注册</router-link>
@@ -48,7 +45,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
@@ -59,12 +56,12 @@ const loginFormRef = ref(null)
 const loading = ref(false)
 
 const loginForm = reactive({
-  userName: '',
+  name: '',  // 注意字段名是 name
   password: ''
 })
 
 const loginRules = {
-  userName: [
+  name: [
     { required: true, message: '请输入账号', trigger: 'blur' },
     { min: 3, max: 20, message: '长度在 3 到 20 个字符', trigger: 'blur' }
   ],
@@ -74,67 +71,54 @@ const loginRules = {
   ]
 }
 
-// 演示账号（仅用于本地查看页面样式，不请求后端）
-const DEMO_USERNAME = 'admin'
-const DEMO_PASSWORD = '123456'
-const DEMO_TOKEN = 'demo-admin-token'
-
-// 清空表单
-const resetForm = () => {
-  if (loginFormRef.value) {
-    loginFormRef.value.resetFields()
-  }
-}
-
 const handleLogin = async () => {
+  console.log('最终请求地址:', request.defaults.baseURL + '/login')
+console.log('请求参数:', {name: loginForm.name, password: loginForm.password})
+  console.log('请求地址:', request.defaults.baseURL + '/login')
   if (!loginFormRef.value) return
 
   try {
     await loginFormRef.value.validate()
     loading.value = true
 
-    // 演示账号：不请求后端，直接写入 token 和用户信息并跳转
-    if (loginForm.userName === DEMO_USERNAME && loginForm.password === DEMO_PASSWORD) {
-      localStorage.setItem('token', DEMO_TOKEN)
-      const demoUserInfo = { name: '演示管理员', role: 'ADMIN', userName: DEMO_USERNAME }
-      localStorage.setItem('userInfo', JSON.stringify(demoUserInfo))
-      ElMessage.success('登录成功（演示账号）')
-      router.push('/')
-      return
-    }
-
     const res = await request({
-      url: '/login',
+      url: '/login',  // 注意路径是 /api/login
       method: 'post',
       data: {
-        userName: loginForm.userName,
+        name: loginForm.name,      // 字段名是 name
         password: loginForm.password
       }
     })
 
     // 登录成功
-    const token = res.data.token
-    localStorage.setItem('token', token)
-    ElMessage.success('登录成功')
-    router.push('/')
+    console.log('登录返回:', res)
+    const token = res.token || res.data?.token
+    if (token) {
+      localStorage.setItem('token', token)
+      // 优先用接口返回的 userInfo，否则从 JWT 解析 role
+      if (res.userInfo) {
+        localStorage.setItem('userInfo', JSON.stringify(res.userInfo))
+      } else {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+          const role = (payload.role || 'ADMIN').toString().toUpperCase()
+          localStorage.setItem('userInfo', JSON.stringify({ role }))
+        } catch (e) {
+          localStorage.setItem('userInfo', JSON.stringify({ role: 'ADMIN' }))
+        }
+      }
+      ElMessage.success('登录成功')
+      router.push('/monitor')
+    } else {
+      ElMessage.error('登录失败：未获取到token')
+    }
   } catch (error) {
     console.error('登录失败:', error)
-    // 错误处理已在request.js中统一处理
-    resetForm()
+    ElMessage.error('登录失败，请检查账号密码')
   } finally {
     loading.value = false
   }
 }
-
-// 检查是否已登录
-onMounted(() => {
-  const token = localStorage.getItem('token')
-  if (token) {
-    // 自动根据角色跳转(路由守卫中实现逻辑)
-    router.push('/')
-    
-  }
-})
 </script>
 
 <style scoped>
@@ -160,27 +144,12 @@ onMounted(() => {
   margin-bottom: 30px;
   font-size: 28px;
   font-weight: bold;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.login-form {
-  margin-top: 20px;
 }
 
 .login-button {
   width: 100%;
   padding: 12px 0;
   font-size: 16px;
-}
-
-.demo-hint {
-  text-align: center;
-  margin-top: 12px;
-  padding: 8px 12px;
-  font-size: 12px;
-  color: #909399;
-  background: #f4f4f5;
-  border-radius: 6px;
 }
 
 .register-link {
@@ -192,21 +161,5 @@ onMounted(() => {
 .register-link a {
   color: #409EFF;
   text-decoration: none;
-}
-
-.register-link a:hover {
-  text-decoration: underline;
-}
-
-:deep(.el-input__wrapper) {
-  padding: 12px;
-}
-
-:deep(.el-input__inner) {
-  font-size: 16px;
-}
-
-:deep(.el-form-item__error) {
-  padding-top: 4px;
 }
 </style>

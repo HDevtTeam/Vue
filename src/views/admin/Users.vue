@@ -127,41 +127,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import request from '@/utils/request'
-
-// ==================== 模拟数据（完全按照接口文档格式）====================
-const MOCK_USERS = [
-  {
-    id: 1,
-    name: "admin",
-    role: "admin",
-    status: "normal",
-    password: "123456",
-    createTime: "2026-01-01T10:00:00",
-    updateTime: "2026-03-01T14:30:00",
-    organizationId: null
-  },
-  {
-    id: 2,
-    name: "inspector1",
-    role: "inspector",
-    status: "normal",
-    password: "123456",
-    createTime: "2026-01-15T09:20:00",
-    updateTime: "2026-02-28T16:45:00",
-    organizationId: 1
-  },
-  {
-    id: 3,
-    name: "user1",
-    role: "user",
-    status: "disabled",
-    password: "123456",
-    createTime: "2026-02-01T11:30:00",
-    updateTime: "2026-03-02T09:15:00",
-    organizationId: null
-  }
-]
+import { getUserList, addUser, updateUser, deleteUser } from '@/api/user'
 
 // ==================== 状态变量 ====================
 const userList = ref([])
@@ -169,7 +135,7 @@ const loading = ref(false)
 const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(10)
-const showSearch = ref(true)  // 是否需要搜索栏
+const showSearch = ref(true)
 
 // 搜索表单
 const searchForm = ref({
@@ -219,45 +185,27 @@ const formatDate = (dateStr) => {
 }
 
 // ==================== 获取用户列表 ====================
+console.log('fetchUserList 被调用了！')
 const fetchUserList = async () => {
   console.log('fetchUserList 被调用了！')
   loading.value = true
   
   try {
-    // 模拟接口调用（延迟500ms）
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    // 模拟搜索过滤
-    let filteredUsers = [...MOCK_USERS]
-    if (searchForm.value.name) {
-      filteredUsers = filteredUsers.filter(u => 
-        u.name.toLowerCase().includes(searchForm.value.name.toLowerCase())
-      )
-    }
-    if (searchForm.value.role) {
-      filteredUsers = filteredUsers.filter(u => u.role === searchForm.value.role)
-    }
-    if (searchForm.value.status) {
-      filteredUsers = filteredUsers.filter(u => u.status === searchForm.value.status)
-    }
-    
-    // 完全按照接口文档的返回格式
-    const res = {
-      users: filteredUsers,
-      commonResultResponse: {
-        code: 200,
-        message: "success"
-      }
-    }
-    
+    // 真实接口
+    const res = await getUserList()
     console.log('获取用户列表返回：', res)
-    userList.value = res.users || []
+    
+    // 后端返回结构：{ commonResultResponse: {...}, userList: [...] }
+    userList.value = res.userList || res.users || []
     total.value = userList.value.length
     
   } catch (error) {
-    console.error('获取用户列表失败,使用模拟数据：', error)
-    userList.value = MOCK_USERS
-    total.value = userList.value.length
+    console.error('获取用户列表失败:', error)
+    ElMessage.error('获取用户列表失败')
+    
+    // 接口失败时用空数组
+    userList.value = []
+    total.value = 0
   } finally {
     loading.value = false
   }
@@ -281,7 +229,6 @@ const resetSearch = () => {
 // ==================== 分页 ====================
 const handleSizeChange = (val) => {
   pageSize.value = val
-  // 前端分页，不需要重新请求
 }
 
 const handleCurrentChange = (val) => {
@@ -307,7 +254,7 @@ const handleEdit = (row) => {
   formData.value = {
     id: row.id,
     name: row.name,
-    password: '',  // 编辑时密码留空
+    password: '',
     role: row.role,
     status: row.status
   }
@@ -326,17 +273,9 @@ const handleDelete = (row) => {
     }
   ).then(async () => {
     try {
-      // 模拟删除
-      await new Promise(resolve => setTimeout(resolve, 300))
-      
-      // 从模拟数据中删除
-      const index = MOCK_USERS.findIndex(u => u.id === row.id)
-      if (index !== -1) {
-        MOCK_USERS.splice(index, 1)
-      }
-      
+      await deleteUser(row.id)
       ElMessage.success('删除成功')
-      fetchUserList()  // 刷新列表
+      fetchUserList()
     } catch (error) {
       console.error('删除失败：', error)
       ElMessage.error('删除失败')
@@ -352,40 +291,31 @@ const submitForm = async () => {
     if (valid) {
       submitting.value = true
       try {
-        // 模拟接口调用
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
         if (dialogType.value === 'add') {
-          // 新增用户（按文档只需要 name 和 password）
-          const newUser = {
-            id: MOCK_USERS.length + 1,
+          // 新增只需要 name 和 password
+          await addUser({
             name: formData.value.name,
-            password: formData.value.password,
-            role: formData.value.role || 'user',
-            status: formData.value.status || 'normal',
-            createTime: new Date().toISOString(),
-            updateTime: new Date().toISOString(),
-            organizationId: null
-          }
-          MOCK_USERS.push(newUser)
+            password: formData.value.password
+          })
           ElMessage.success('新增成功')
         } else {
-          // 编辑用户
-          const user = MOCK_USERS.find(u => u.id === formData.value.id)
-          if (user) {
-            user.name = formData.value.name
-            user.role = formData.value.role
-            user.status = formData.value.status
-            if (formData.value.password) {
-              user.password = formData.value.password
-            }
-            user.updateTime = new Date().toISOString()
+          // 编辑需要完整对象
+          const updateData = {
+            id: formData.value.id,
+            name: formData.value.name,
+            role: formData.value.role,
+            status: formData.value.status
           }
+          // 如果密码有值，则修改密码
+          if (formData.value.password) {
+            updateData.password = formData.value.password
+          }
+          await updateUser(updateData)
           ElMessage.success('修改成功')
         }
         
         dialogVisible.value = false
-        fetchUserList()  // 刷新列表
+        fetchUserList()
       } catch (error) {
         console.error('操作失败：', error)
         ElMessage.error('操作失败')

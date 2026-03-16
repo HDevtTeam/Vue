@@ -6,19 +6,23 @@
     </div>
 
     <el-table :data="deviceList" border stripe v-loading="loading">
-      <el-table-column prop="id" label="设备编号" width="120" />
+      <el-table-column prop="id" label="设备编号" width="100" />
       <el-table-column prop="name" label="设备名称" width="150" />
-      <el-table-column prop="model" label="设备型号" width="150" />
+      <el-table-column prop="sn" label="SN" width="160" />
       <el-table-column prop="status" label="状态" width="100">
         <template #default="{ row }">
-          <el-tag :type="row.status === '在线' ? 'success' : 'info'">
-            {{ row.status }}
+          <el-tag :type="statusTagType(row.status)">
+            {{ statusText(row.status) }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="orgName" label="所属组织" width="150" />
-      <el-table-column prop="ownerName" label="归属人" width="120" />
-      <el-table-column prop="rtmp" label="RTMP地址" min-width="250" show-overflow-tooltip />
+      <el-table-column prop="organizationId" label="组织ID" width="100" />
+      <el-table-column prop="userId" label="用户ID" width="90" />
+      <el-table-column prop="createTime" label="创建时间" width="180">
+        <template #default="{ row }">
+          {{ formatDate(row.createTime) }}
+        </template>
+      </el-table-column>
       <el-table-column label="操作" width="280" fixed="right">
         <template #default="{ row }">
           <el-button type="primary" link @click="handleDetail(row)">详情</el-button>
@@ -28,67 +32,99 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <DeviceForm ref="formRef" @success="fetchDeviceList" />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { mockDevices } from '@/api/mock'
+import { getDeviceList, deleteDeviceBySn } from '@/api/device'
 import { useRouter } from 'vue-router'
+import DeviceForm from './components/DeviceForm.vue'
 
 const router = useRouter()
 const deviceList = ref([])
 const loading = ref(false)
+const formRef = ref(null)
 
-// 获取设备列表（模拟）
+const statusText = (s) => {
+  const map = { idle: '空闲', flying: '飞行中', maintenance: '维护中', fault: '故障' }
+  return map[s] || s || '-'
+}
+
+const statusTagType = (s) => {
+  const map = { idle: 'success', flying: 'warning', maintenance: 'info', fault: 'danger' }
+  return map[s] || 'info'
+}
+
+const formatDate = (str) => {
+  if (!str) return '-'
+  const d = new Date(str)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 const fetchDeviceList = async () => {
   loading.value = true
   try {
-    // 模拟接口调用
-    await new Promise(resolve => setTimeout(resolve, 500))
-    deviceList.value = mockDevices
-    ElMessage.success('获取成功')
+    const res = await getDeviceList()
+    deviceList.value = res.devices || []
   } catch (error) {
-    console.error('获取失败:', error)
-    ElMessage.error('获取失败')
+    console.error('获取设备列表失败:', error)
+    ElMessage.error('获取设备列表失败')
+    deviceList.value = []
   } finally {
     loading.value = false
   }
 }
 
-// 详情
 const handleDetail = (row) => {
-  router.push(`/device/detail/${row.id}`)
+  router.push(`/admin/device/detail/${row.id}`)
 }
 
-// 编辑
 const handleEdit = (row) => {
-  // 打开弹窗，传入选中的行
-  openDialog('edit', row)
+  formRef.value?.open('edit', row)
 }
 
-// RTMP配置
 const handleConfig = (row) => {
-  router.push(`/device/config/${row.id}`)
+  router.push(`/admin/device/config/${encodeURIComponent(row.sn)}`)
 }
 
-// 删除
 const handleDelete = (row) => {
   ElMessageBox.confirm(`确定删除设备【${row.name}】吗？`, '提示', {
     type: 'warning'
   }).then(async () => {
-    // 模拟删除
-    await new Promise(resolve => setTimeout(resolve, 300))
-    deviceList.value = deviceList.value.filter(d => d.id !== row.id)
-    ElMessage.success('删除成功')
+    try {
+      await deleteDeviceBySn(row.sn)
+      ElMessage.success('删除成功')
+      fetchDeviceList()
+    } catch (error) {
+      console.error('删除失败:', error)
+      ElMessage.error('删除失败')
+    }
   }).catch(() => {})
 }
 
-// 新增
 const handleAdd = () => {
-  openDialog('add')
+  formRef.value?.open('add')
 }
 
 onMounted(fetchDeviceList)
 </script>
+
+<style scoped>
+.device-container {
+  padding: 20px;
+}
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.header h1 {
+  margin: 0;
+  font-size: 24px;
+}
+</style>
