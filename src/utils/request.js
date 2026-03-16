@@ -4,7 +4,7 @@ import router from '../router'
 
 // 创建axios实例
 const service = axios.create({
-  baseURL: 'http://localhost:8080',
+  baseURL: 'http://localhost:8081',
   timeout: 10000 // 请求超时时间
 })
 
@@ -29,7 +29,7 @@ service.interceptors.request.use(
 service.interceptors.response.use(
   response => {
     const res = response.data
-    
+
     // 如果返回的状态码不是200，说明接口请求失败
     if (res.code !== 200) {
       if (res.code === 401 && router.currentRoute.value.path === '/login') {
@@ -37,17 +37,17 @@ service.interceptors.response.use(
       } else {
         ElMessage.error(res.msg || '请求失败')
       }
-      
+
       // 401: 未登录或token过期
       if (res.code === 401) {
         // 清除本地token
         localStorage.removeItem('token')
         localStorage.removeItem('userInfo')
-        
+
         // 跳转到登录页
         router.replace('/login')
       }
-      
+
       return Promise.reject(new Error(res.msg || '请求失败'))
     } else {
       return res
@@ -55,7 +55,7 @@ service.interceptors.response.use(
   },
   error => {
     console.error('响应错误:', error)
-    
+
     // 处理401错误
     if (error.response && error.response.status === 401) {
       localStorage.removeItem('token')
@@ -71,7 +71,7 @@ service.interceptors.response.use(
       // 其他错误
       ElMessage.error(error.response?.data?.msg || '服务器异常，请稍后重试')
     }
-    
+
     return Promise.reject(error)
   }
 )

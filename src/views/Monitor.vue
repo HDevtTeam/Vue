@@ -1,83 +1,164 @@
 <template>
-  <div class="monitor-container">
-    <!-- 控制面板 -->
-    <div class="control-panel">
-      <div class="stream-controls">
-        <el-radio-group v-model="streamType" @change="switchStreamType">
-          <el-radio-button label="local">本地视频</el-radio-button>
-          <el-radio-button label="rtmp">RTMP流</el-radio-button>
-        </el-radio-group>
-        
-        <div v-if="streamType === 'rtmp'" class="rtmp-input">
-          <el-input
-            v-model="rtmpUrl"
-            placeholder="请输入RTMP流地址（可选，留空使用默认地址）"
-            class="rtmp-url-input"
-            @keyup.enter="connectRTMP"
-          >
+  <div class="monitor-page">
+    <el-container class="full">
+      <el-header class="top-bar">
+        <div class="title-area">
+          <div class="title">视频监控</div>
+          <el-tag :type="statusTagType" class="status-tag">{{ connectionStatus }}</el-tag>
+        </div>
+        <div class="controls-area">
+          <el-radio-group v-model="streamType" @change="switchStreamType" class="ctrl-item">
+            <el-radio-button label="local">本地</el-radio-button>
+            <el-radio-button label="rtmp">RTMP</el-radio-button>
+          </el-radio-group>
+          <el-input v-model="deviceSnQuery" placeholder="输入设备SN查询流" class="ctrl-item" @keyup.enter="queryStreams">
             <template #append>
-              <el-button @click="connectRTMP" :disabled="isConnecting">
-                {{ isConnecting ? '连接中...' : '连接' }}
-              </el-button>
+              <el-button @click="queryStreams">查询</el-button>
+            </template>
+          </el-input>
+          <el-input v-if="streamType==='rtmp' && !selectedDeviceId" v-model="rtmpUrl" placeholder="RTMP 地址" class="ctrl-item" @keyup.enter="handleConnect">
+            <template #append>
+              <el-button @click="handleConnect" :loading="isConnecting">连接</el-button>
             </template>
           </el-input>
         </div>
-      </div>
-    </div>
-
-    <!-- 视频显示区域 -->
-    <div class="monitor-content" :class="{ 'loading': !isConnected }">
-      <!-- 视频容器 -->
-      <div class="video-container">
-        <img v-if="imageData" :src="imageData" alt="视频流" class="video-stream" />
-        
-        <!-- 加载状态 -->
-        <el-empty v-else-if="!isConnected && isConnecting" :description="getLoadingText()" v-loading="true" />
-        
-        <!-- 错误状态 -->
-        <el-empty v-else-if="!isConnected" description="视频流连接失败">
-          <template #extra>
-            <el-button type="primary" @click="retryConnection" :loading="isConnecting">
-              {{ isConnecting ? '连接中...' : '重试连接' }}
-            </el-button>
-          </template>
-        </el-empty>
-      </div>
-
-      <!-- 数据展示 -->
-      <div v-if="streamData" class="stream-info">
-        <div class="info-item">
-          <span class="label">来源:</span>
-          <span class="value">{{ getSourceText() }}</span>
+        <div class="action-area">
+          <el-button type="primary" @click="handleConnect" :loading="isConnecting">开始</el-button>
+          <el-button @click="retryConnection" :disabled="isConnecting">重试</el-button>
+          <el-button type="danger" @click="handleDisconnect">断开</el-button>
+          <el-button type="success" @click="startSelectedStream" :disabled="!selectedStreamId">启动流</el-button>
+          <el-button type="warning" @click="stopSelectedStream" :disabled="!selectedStreamId">停止流</el-button>
         </div>
-        <div class="info-item">
-          <span class="label">FPS:</span>
-          <span class="value">{{ streamData.fps }}</span>
-        </div>
-        <div class="info-item">
-          <span class="label">速度:</span>
-          <span class="value">{{ streamData.speed }} km/h</span>
-        </div>
-        <div class="info-item">
-          <span class="label">天气:</span>
-          <span class="value">{{ streamData.weather }}</span>
-        </div>
-      </div>
-    </div>
+      </el-header>
+      <el-container>
+        <el-aside width="300px" class="left-panel">
+          <div class="panel-title">视频流列表</div>
+          <el-scrollbar class="device-list">
+            <div v-for="s in streams" :key="s.stream_id || s.streamId" class="device-item" :class="{ active: (s.stream_id||s.streamId)===selectedStreamId }" @click="selectStream(s)">
+              <div class="device-name">{{ s.device_sn || s.deviceSn }}</div>
+              <div class="device-meta">
+                <el-tag size="small" type="info">{{ (s.stream_status||s.streamStatus) || '未知' }}</el-tag>
+                <el-tag size="small" :type="(s.stream_id||s.streamId)===selectedStreamId ? statusTagType : 'info'">{{ (s.stream_id||s.streamId)===selectedStreamId ? connectionStatus : '未选中' }}</el-tag>
+              </div>
+              <div class="device-meta">
+                <span class="mono">{{ s.stream_url || s.streamUrl }}</span>
+              </div>
+            </div>
+          </el-scrollbar>
+        </el-aside>
+        <el-main class="main-panel">
+          <div class="video-card">
+            <div class="video-header">
+              <div class="video-title">{{ selectedStream ? (selectedStream.device_sn || selectedStream.deviceSn) : '未选择流' }}</div>
+              <div class="video-ops">
+                <el-button size="small" @click="snapshot" :disabled="!imageData">截图</el-button>
+                <el-button size="small" @click="enterFullscreen">全屏</el-button>
+              </div>
+            </div>
+            <div class="video-body" ref="videoBoxRef">
+              <img v-if="imageData" :src="imageData" class="video-stream" />
+              <div v-else class="video-placeholder">
+                <el-empty v-if="!isConnected && isConnecting" :description="getLoadingText()" />
+                <el-empty v-else-if="!isConnected" description="未连接" />
+              </div>
+              <div class="video-overlay">
+                <div class="kpis">
+                  <div class="kpi">
+                    <div class="kpi-label">FPS</div>
+                    <div class="kpi-value">{{ streamData?.fps ?? 0 }}</div>
+                  </div>
+                  <div class="kpi">
+                    <div class="kpi-label">速度</div>
+                    <div class="kpi-value">{{ streamData?.speed ?? 0 }}</div>
+                  </div>
+                  <div class="kpi">
+                    <div class="kpi-label">天气</div>
+                    <div class="kpi-value">{{ streamData?.weather ?? '未知' }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="info-grid">
+            <el-card class="info-card">
+              <div class="info-title">当前视频流</div>
+              <div class="info-row"><span>stream_id</span><span>{{ selectedStreamId || '-' }}</span></div>
+              <div class="info-row"><span>device_sn</span><span>{{ selectedStream?.device_sn || selectedStream?.deviceSn || '-' }}</span></div>
+              <div class="info-row"><span>stream_url</span><span class="mono">{{ selectedStream?.stream_url || selectedStream?.streamUrl || '-' }}</span></div>
+              <div class="info-row"><span>stream_status</span><span>{{ selectedStream?.stream_status || selectedStream?.streamStatus || '-' }}</span></div>
+              <div class="info-row"><span>start_time</span><span>{{ selectedStream?.start_time || selectedStream?.startTime || '-' }}</span></div>
+              <div class="info-row"><span>stop_time</span><span>{{ selectedStream?.stop_time || selectedStream?.stopTime || '-' }}</span></div>
+              <div class="info-row"><span>record_path</span><span class="mono">{{ selectedStream?.record_path || selectedStream?.recordPath || '-' }}</span></div>
+            </el-card>
+            <el-card class="info-card">
+              <div class="info-title">事件日志</div>
+              <el-scrollbar class="log-list">
+                <div v-for="(l,idx) in logs" :key="idx" class="log-item">
+                  <el-tag size="small" :type="logTypeTag(l.type)">{{ l.type }}</el-tag>
+                  <span class="log-time">{{ formatTime(l.time) }}</span>
+                  <span class="log-text">{{ l.message }}</span>
+                </div>
+              </el-scrollbar>
+            </el-card>
+          </div>
+        </el-main>
+      </el-container>
+    </el-container>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import request from '../utils/request'
+import axios from 'axios'
+
+const logs=ref([])
+const addLog=(type,message)=>{
+  logs.value.unshift({type,message,time:new Date()})
+  if(logs.value.length>50) logs.value.pop()
+}
+
+const streams=ref([])
+const selectedStreamId=ref(null)
+const selectedStream=computed(()=>
+  streams.value.find(s=>(s.stream_id||s.streamId)===selectedStreamId.value)||null
+)
+const deviceSnQuery=ref('')
+
+const fetchAllStreams=async()=>{
+  try{
+    addLog('info','正在同步运行中的视频流...')
+    const res=await request({url:'/api/streams/running',method:'get'})
+    // VideoStreamResponse 结构: { commonResultResponse: {code, msg}, videoStreamList: [...], ... }
+    const list = res.videoStreamList || res.data?.videoStreamList || (Array.isArray(res)?res:[])
+    streams.value = list
+    if (list.length > 0) {
+      addLog('success', `同步成功，当前有 ${list.length} 条运行中的视频流`)
+    } else {
+      addLog('info', '当前暂无运行中的视频流')
+    }
+  }catch(e){
+    console.error('获取视频流列表失败:',e)
+    addLog('error','获取流列表失败')
+  }
+}
+
+onMounted(()=>{
+  fetchAllStreams()
+  connectLocalVideo()
+})
 
 const ws = ref(null)
 const isConnected = ref(false)
 const isConnecting = ref(false)
 const imageData = ref(null)
 const streamData = ref(null)
-const streamType = ref('local') // 'local' 或 'rtmp'
+const streamType = ref('local')
 const rtmpUrl = ref('')
+const videoBoxRef=ref(null)
+const connectionStatus=computed(()=>isConnecting.value?'连接中':(isConnected.value?'在线':'离线'))
+const statusTagType=computed(()=>isConnecting.value?'warning':(isConnected.value?'success':'danger'))
 
 // 获取加载文本
 const getLoadingText = () => {
@@ -127,7 +208,6 @@ const handleWebSocketMessage = (event) => {
     }
   } catch (error) {
     console.error('解析视频流数据失败:', error)
-    // 不要因为单次解析错误就断开连接，继续等待有效数据
   }
 }
 
@@ -137,6 +217,7 @@ const handleWebSocketError = (error) => {
   isConnecting.value = false
   ElMessage.error(`${streamType.value === 'local' ? '本地视频' : 'RTMP'}流连接错误`)
   console.error('WebSocket错误:', error)
+  addLog('error','连接错误')
 }
 
 // 处理WebSocket关闭
@@ -150,6 +231,7 @@ const handleWebSocketClose = (sourceName, event) => {
             (streamType.value === 'rtmp' && sourceName === 'RTMP流')) {
     ElMessage.warning(`${sourceName}连接已关闭`)
   }
+  addLog('close',`${sourceName}关闭`)
 }
 
 // 连接本地视频WebSocket
@@ -169,13 +251,14 @@ const connectLocalVideo = () => {
   }, 10000) // 10秒超时
   
   try {
-    ws.value = new WebSocket('ws://localhost:8081/ws/video')
+    ws.value = new WebSocket('ws://localhost:8082/ws/video')
 
     ws.value.onopen = () => {
       clearTimeout(connectionTimeout)
       isConnected.value = true
       isConnecting.value = false
       ElMessage.success('本地视频流连接成功')
+      addLog('open','本地视频已连接')
       
       // 设置数据接收超时
       startDataTimeout()
@@ -201,7 +284,37 @@ const connectLocalVideo = () => {
     ElMessage.error(`本地视频流连接失败: ${error.message}`)
     isConnecting.value = false
     console.error('WebSocket创建错误:', error)
+    addLog('error','本地视频连接失败')
   }
+}
+
+const connectSelectedStream=()=>{
+  closeWebSocket()
+  isConnecting.value=true
+  imageData.value=null
+  streamData.value=null
+
+  const url=selectedStream?.value?.stream_url || selectedStream?.value?.streamUrl
+  if(!url){
+    ElMessage.error('当前流缺少 stream_url，无法连接')
+    isConnecting.value=false
+    return
+  }
+  const wsUrl=`ws://localhost:8081/ws/rtmp?rtmp_url=${encodeURIComponent(url)}`
+  ws.value=new WebSocket(wsUrl)
+
+  ws.value.onopen=()=>{
+    isConnected.value=true
+    isConnecting.value=false
+    addLog('open','设备RTMP已连接')
+  }
+  ws.value.onmessage=(event)=>{
+    resetDataTimeout()
+    handleWebSocketMessage(event)
+  }
+  ws.value.onerror=handleWebSocketError
+  ws.value.onclose = (event) => handleWebSocketClose('RTMP流', event)
+  startDataTimeout()
 }
 
 // 连接RTMP流
@@ -235,7 +348,8 @@ const connectRTMP = () => {
       clearTimeout(connectionTimeout)
       isConnected.value = true
       isConnecting.value = false
-      ElMessage.success('RTMP流连接成功')
+     ElMessage.success('RTMP流连接成功')
+      addLog('open','RTMP已连接')
       
       // 设置数据接收超时
       startDataTimeout()
@@ -261,6 +375,7 @@ const connectRTMP = () => {
     ElMessage.error(`RTMP流连接失败: ${error.message}`)
     isConnecting.value = false
     console.error('WebSocket创建错误:', error)
+    addLog('error','RTMP连接失败')
   }
 }
 
@@ -295,7 +410,7 @@ const switchStreamType = (type) => {
   if (type === 'local') {
     connectLocalVideo()
   } else if (type === 'rtmp') {
-    connectRTMP()
+    if(selectedStreamId.value){connectSelectedStream()}else{connectRTMP()}
   }
 }
 
@@ -329,11 +444,6 @@ const closeWebSocket = () => {
   }
 }
 
-// 组件挂载时连接本地视频
-onMounted(() => {
-  connectLocalVideo()
-})
-
 // 组件卸载时清理资源
 onUnmounted(() => {
   // 清除所有超时计时器
@@ -341,84 +451,285 @@ onUnmounted(() => {
   // 关闭WebSocket连接
   closeWebSocket()
 })
+
+const selectStream=(s)=>{
+  selectedStreamId.value=s.stream_id || s.streamId
+  connectSelectedStream()
+}
+const handleConnect=()=>{
+  if(streamType.value==='local'){connectLocalVideo();return}
+  if(selectedStreamId.value){connectSelectedStream();return}
+  connectRTMP()
+}
+const handleDisconnect=()=>{
+  closeWebSocket()
+  isConnected.value=false
+  isConnecting.value=false
+  addLog('info','已断开连接')
+}
+const snapshot=()=>{
+  if(!imageData.value) return
+  const a=document.createElement('a')
+  a.href=imageData.value
+  a.download=`snapshot_${Date.now()}.jpg`
+  a.click()
+}
+const enterFullscreen=()=>{
+  const el=videoBoxRef.value
+  if(!el) return
+  if(el.requestFullscreen) el.requestFullscreen()
+}
+const logTypeTag=(t)=>{
+  if(t==='error') return 'danger'
+  if(t==='open') return 'success'
+  if(t==='close') return 'warning'
+  return 'info'
+}
+const formatTime=(d)=>{
+  const dt=new Date(d)
+  const p=n=>String(n).padStart(2,'0')
+  return `${p(dt.getHours())}:${p(dt.getMinutes())}:${p(dt.getSeconds())}`
+}
+
+const queryStreams=async()=>{
+  if(!deviceSnQuery.value){
+    // 如果为空，则恢复加载运行中的流
+    fetchAllStreams()
+    return
+  }
+  try{
+    const res=await request({url:`/api/streams/device_sn`,method:'get',params:{device_sn:deviceSnQuery.value}})
+    const list = res.videoStreamList || res.data?.videoStreamList || (Array.isArray(res)?res:[])
+    streams.value = list
+    if(streams.value.length>0){
+      selectedStreamId.value = streams.value[0].stream_id || streams.value[0].streamId
+    }
+    addLog('info',`查询到 ${streams.value.length} 条流`)
+  }catch(e){
+    console.error('查询流失败:',e)
+    ElMessage.error('查询流失败')
+  }
+}
+
+const startSelectedStream=async()=>{
+  if(!selectedStreamId.value){ElMessage.warning('未选择流');return}
+  try{
+    await request({url:`/api/streams/${selectedStreamId.value}/start`,method:'post'})
+    ElMessage.success('启动流成功')
+    addLog('info','启动流成功')
+    setTimeout(fetchAllStreams, 1000)
+  }catch(e){
+    ElMessage.error('启动失败')
+  }
+}
+
+const stopSelectedStream=async()=>{
+  if(!selectedStreamId.value){ElMessage.warning('未选择流');return}
+  try{
+    await request({url:`/api/streams/${selectedStreamId.value}/stop`,method:'post'})
+    ElMessage.success('停止流成功')
+    addLog('info','停止流成功')
+    setTimeout(fetchAllStreams, 1000)
+  }catch(e){
+    ElMessage.error('停止失败')
+  }
+}
 </script>
 
 <style scoped>
-.monitor-container {
-  display: flex;
-  flex-direction: column;
-  height: 100vh; /* 使用视口高度 */
-  padding: 20px;
+.monitor-page {
+  height: 100vh;
+  background: linear-gradient(180deg, #e8eef3 0%, #f2f6f9 100%);
+  padding: 12px;
   box-sizing: border-box;
 }
-
-.control-panel {
-  margin-bottom: 20px;
-}
-
-.stream-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.rtmp-input {
-  margin-top: 10px;
-  max-width: 600px;
-}
-
-.monitor-content {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background-color: #f5f7fa;
-  border-radius: 4px;
+.full {
+  height: 100%;
+  border-radius: 12px;
   overflow: hidden;
-  width: 100%;
-  height: calc(100vh - 120px); /* 减去控制面板和padding的高度 */
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
 }
-
-.monitor-content.loading {
+.top-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
-}
-
-.video-container {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  background-color: #f5f7fa;
-}
-
-.video-stream {
-  width: 1800px; /* 确保横向填满 */
-  height: auto;
-  max-height: 100%;
-  object-fit: contain; /* 保持原始宽高比，不裁剪内容 */
-}
-
-.stream-info {
-  background-color: rgba(0, 0, 0, 0.7); /* 恢复半透明黑色背景 */
-  color: white;
-  padding: 10px 20px;
-  display: flex;
   justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #ebeef5;
 }
-
-.info-item {
+.title-area {
   display: flex;
   align-items: center;
+  gap: 12px;
 }
-
-.label {
-  font-weight: bold;
-  margin-right: 5px;
+.title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c3e50;
 }
-
-.value {
-  font-family: monospace;
+.status-tag {
+  transform: translateY(-1px);
+}
+.controls-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ctrl-item {
+  min-width: 220px;
+}
+.action-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.left-panel {
+  border-right: 1px solid #ebeef5;
+  padding: 12px;
+}
+.panel-title {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 8px;
+}
+.device-list {
+  height: calc(100% - 28px);
+}
+.device-item {
+  padding: 10px 12px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all .2s;
+}
+.device-item:hover {
+  border-color: #c0c4cc;
+}
+.device-item.active {
+  border-color: #409EFF;
+  background: #ecf5ff;
+}
+.device-name {
+  font-weight: 600;
+  color: #303133;
+}
+.device-meta {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+}
+.main-panel {
+  padding: 12px;
+  background: #f6f8fb;
+}
+.video-card {
+  background: #111827;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #1f2937;
+}
+.video-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: #0b1220;
+  border-bottom: 1px solid #1f2937;
+  color: #e5e7eb;
+}
+.video-title {
+  font-size: 14px;
+}
+.video-ops {
+  display: flex;
+  gap: 8px;
+}
+.video-body {
+  position: relative;
+  height: calc(70vh - 80px);
+  min-height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0b1220;
+}
+.video-stream {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.video-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.video-overlay {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+}
+.kpis {
+  display: flex;
+  gap: 10px;
+}
+.kpi {
+  min-width: 90px;
+  background: rgba(0,0,0,0.55);
+  color: #e5e7eb;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.kpi-label {
+  font-size: 12px;
+  color: #9ca3af;
+}
+.kpi-value {
+  font-size: 16px;
+  font-weight: 700;
+}
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+.info-card {
+  height: 220px;
+}
+.info-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px dashed #ebeef5;
+  font-size: 13px;
+}
+.info-row:last-child {
+  border-bottom: none;
+}
+.mono {
+  font-family: Consolas, Monaco, monospace;
+  color: #606266;
+}
+.log-list {
+  height: 160px;
+}
+.log-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 12px;
+}
+.log-time {
+  color: #909399;
 }
 </style>
