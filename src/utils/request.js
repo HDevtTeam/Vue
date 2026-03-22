@@ -74,7 +74,7 @@ service.interceptors.response.use(
       } else {
         ElMessage.error(msg || '请求失败')
       }
-      
+
       // 401: 未登录或token过期
       if (code === 401) {
         localStorage.removeItem('token')
@@ -102,7 +102,7 @@ service.interceptors.response.use(
     } else {
       ElMessage.error(error.response?.data?.msg || '服务器异常，请稍后重试')
     }
-    
+
     return Promise.reject(error)
   }
 )

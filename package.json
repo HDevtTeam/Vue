@@ -14,8 +14,10 @@
     "dayjs": "^1.11.19",
     "echarts": "^6.0.0",
     "element-plus": "^2.13.2",
+    "file-saver": "^2.0.5",
     "vue": "^3.5.25",
-    "vue-router": "^5.0.3"
+    "vue-router": "^5.0.3",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.4",
