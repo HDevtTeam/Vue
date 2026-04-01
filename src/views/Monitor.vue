@@ -128,18 +128,29 @@ const deviceSnQuery=ref('')
 
 const fetchAllStreams=async()=>{
   try{
-    addLog('info','正在同步运行中的视频流...')
-    const res=await request({url:'/api/streams/running',method:'get'})
-    // VideoStreamResponse 结构: { commonResultResponse: {code, msg}, videoStreamList: [...], ... }
-    const list = res.videoStreamList || res.data?.videoStreamList || (Array.isArray(res)?res:[])
-    streams.value = list
+    addLog('info','正在同步活跃的RTMP流...')
+    // 直接使用axios请求，避免baseURL的影响
+    const res=await axios.get('http://localhost:8081/rtmp/streams', { timeout: 10000 })
+    
+    // 处理后端返回的数据格式
+    const list = res.data?.streams || []
+    
+    // 转换数据格式，确保与前端期望的格式一致
+    streams.value = list.map(stream => ({
+      streamId: stream.stream_name || stream.streamId,
+      deviceSn: stream.stream_name || stream.deviceSn,
+      streamUrl: stream.rtmp_url || stream.streamUrl,
+      streamStatus: 'active',
+      startTime: new Date().toISOString()
+    }))
+    
     if (list.length > 0) {
-      addLog('success', `同步成功，当前有 ${list.length} 条运行中的视频流`)
+      addLog('success', `同步成功，当前有 ${list.length} 条活跃的RTMP流`)
     } else {
-      addLog('info', '当前暂无运行中的视频流')
+      addLog('info', '当前暂无活跃的RTMP流')
     }
   }catch(e){
-    console.error('获取视频流列表失败:',e)
+    console.error('获取RTMP流列表失败:',e)
     addLog('error','获取流列表失败')
   }
 }
@@ -165,7 +176,7 @@ const getLoadingText = () => {
   if (streamType.value === 'rtmp') {
     return '正在连接RTMP流...'
   }
-  return '正在连接本地视频流...'
+  return '正在连接原始视频流...'
 }
 
 // 获取来源文本
@@ -173,7 +184,7 @@ const getSourceText = () => {
   if (!streamData.value) return ''
   
   if (streamType.value === 'local') {
-    return '本地视频'
+    return '原始视频'
   } else {
     return rtmpUrl.value ? '自定义RTMP流' : '默认RTMP流'
   }
@@ -215,7 +226,7 @@ const handleWebSocketMessage = (event) => {
 const handleWebSocketError = (error) => {
   isConnected.value = false
   isConnecting.value = false
-  ElMessage.error(`${streamType.value === 'local' ? '本地视频' : 'RTMP'}流连接错误`)
+  ElMessage.error(`${streamType.value === 'local' ? '原始视频' : 'RTMP'}流连接错误`)
   console.error('WebSocket错误:', error)
   addLog('error','连接错误')
 }
@@ -234,7 +245,7 @@ const handleWebSocketClose = (sourceName, event) => {
   addLog('close',`${sourceName}关闭`)
 }
 
-// 连接本地视频WebSocket
+// 连接原始视频WebSocket
 const connectLocalVideo = () => {
   closeWebSocket()
   isConnecting.value = true
@@ -244,21 +255,21 @@ const connectLocalVideo = () => {
   // 设置连接超时
   const connectionTimeout = setTimeout(() => {
     if (ws.value && ws.value.readyState !== WebSocket.OPEN) {
-      ElMessage.error('本地视频流连接超时')
+      ElMessage.error('原始视频流连接超时')
       closeWebSocket()
       isConnecting.value = false
     }
   }, 10000) // 10秒超时
   
   try {
-    ws.value = new WebSocket('ws://localhost:8082/ws/video')
+    ws.value = new WebSocket('ws://localhost:8081/ws/rtmp/raw')
 
     ws.value.onopen = () => {
       clearTimeout(connectionTimeout)
       isConnected.value = true
       isConnecting.value = false
-      ElMessage.success('本地视频流连接成功')
-      addLog('open','本地视频已连接')
+      ElMessage.success('原始视频流连接成功')
+      addLog('open','原始视频已连接')
       
       // 设置数据接收超时
       startDataTimeout()
@@ -277,14 +288,14 @@ const connectLocalVideo = () => {
     
     ws.value.onclose = (event) => {
       clearTimeout(connectionTimeout)
-      handleWebSocketClose('本地视频流', event)
+      handleWebSocketClose('原始视频流', event)
     }
   } catch (error) {
     clearTimeout(connectionTimeout)
-    ElMessage.error(`本地视频流连接失败: ${error.message}`)
+    ElMessage.error(`原始视频流连接失败: ${error.message}`)
     isConnecting.value = false
     console.error('WebSocket创建错误:', error)
-    addLog('error','本地视频连接失败')
+    addLog('error','原始视频连接失败')
   }
 }
 
@@ -294,9 +305,9 @@ const connectSelectedStream=()=>{
   imageData.value=null
   streamData.value=null
 
-  const url=selectedStream?.value?.stream_url || selectedStream?.value?.streamUrl
+  const url=selectedStream.value?.streamUrl || selectedStream.value?.stream_url
   if(!url){
-    ElMessage.error('当前流缺少 stream_url，无法连接')
+    ElMessage.error('当前流缺少 streamUrl，无法连接')
     isConnecting.value=false
     return
   }
@@ -514,7 +525,7 @@ const queryStreams=async()=>{
 const startSelectedStream=async()=>{
   if(!selectedStreamId.value){ElMessage.warning('未选择流');return}
   try{
-    await request({url:`/api/streams/${selectedStreamId.value}/start`,method:'post'})
+    await request({url:`/api/streams/${selectPOSTedStreamId.value}/start`,method:'post'})
     ElMessage.success('启动流成功')
     addLog('info','启动流成功')
     setTimeout(fetchAllStreams, 1000)
