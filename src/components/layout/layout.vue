@@ -187,17 +187,10 @@ onMounted(() => {
           <template #title>手动检测</template>
         </el-menu-item>
         
-        <!-- 所有认证用户可见 -->
-        <el-menu-item index="history">
-          <el-icon><Document /></el-icon>
-          <template #title>历史记录</template>
-        </el-menu-item>
+      
         
         <!-- 所有认证用户可见 -->
-        <el-menu-item index="analysis">
-          <el-icon><DataLine /></el-icon>
-          <template #title>数据分析</template>
-        </el-menu-item>
+        
         <!-- 所有认证用户可见 -->
         <el-menu-item index="reports">
           <el-icon><DataLine /></el-icon>
@@ -237,7 +230,7 @@ onMounted(() => {
       <!-- 顶部导航栏 -->
       <el-header class="header">
         <div class="header-left">
-          <h1 class="system-title">污水检测系统</h1>
+          <h1 class="system-title">无人机检测系统</h1>
         </div>
         <div class="header-right">
           <template v-if="isLoggedIn">
