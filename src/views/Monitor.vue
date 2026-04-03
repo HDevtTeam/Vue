@@ -8,12 +8,17 @@
         </div>
         <div class="controls-area">
           <el-radio-group v-model="streamType" @change="switchStreamType" class="ctrl-item">
-            <el-radio-button label="local">本地</el-radio-button>
+            <el-radio-button label="local">原始流</el-radio-button>
             <el-radio-button label="rtmp">RTMP</el-radio-button>
           </el-radio-group>
           <el-input v-model="deviceSnQuery" placeholder="输入设备SN查询流" class="ctrl-item" @keyup.enter="queryStreams">
             <template #append>
               <el-button @click="queryStreams">查询</el-button>
+            </template>
+          </el-input>
+          <el-input v-if="streamType==='rtmp'" v-model="targetType" placeholder="输入要检测的物体" class="ctrl-item" @keyup.enter="handleConnect">
+            <template #append>
+              <el-button @click="handleConnect" :loading="isConnecting">检测</el-button>
             </template>
           </el-input>
           <el-input v-if="streamType==='rtmp' && !selectedDeviceId" v-model="rtmpUrl" placeholder="RTMP 地址" class="ctrl-item" @keyup.enter="handleConnect">
@@ -125,6 +130,7 @@ const selectedStream=computed(()=>
   streams.value.find(s=>(s.stream_id||s.streamId)===selectedStreamId.value)||null
 )
 const deviceSnQuery=ref('')
+const targetType=ref('')
 
 const fetchAllStreams=async()=>{
   try{
@@ -311,7 +317,14 @@ const connectSelectedStream=()=>{
     isConnecting.value=false
     return
   }
-  const wsUrl=`ws://localhost:8081/ws/rtmp?rtmp_url=${encodeURIComponent(url)}`
+  let wsUrl=`ws://localhost:8081/ws/rtmp?rtmp_url=${encodeURIComponent(url)}`
+  
+  // 如果提供了目标类型，则添加为查询参数
+  if (targetType.value.trim()) {
+    const encodedTargetType = encodeURIComponent(targetType.value.trim())
+    wsUrl = `${wsUrl}&target_type=${encodedTargetType}`;
+  }
+  
   ws.value=new WebSocket(wsUrl)
 
   ws.value.onopen=()=>{
@@ -336,11 +349,23 @@ const connectRTMP = () => {
   streamData.value = null
   
   let wsUrl = 'ws://localhost:8081/ws/rtmp';
+  const params = [];
   
   // 如果提供了URL，则添加为查询参数
   if (rtmpUrl.value.trim()) {
     const encodedUrl = encodeURIComponent(rtmpUrl.value.trim())
-    wsUrl = `${wsUrl}?rtmp_url=${encodedUrl}`;
+    params.push(`rtmp_url=${encodedUrl}`);
+  }
+  
+  // 如果提供了目标类型，则添加为查询参数
+  if (targetType.value.trim()) {
+    const encodedTargetType = encodeURIComponent(targetType.value.trim())
+    params.push(`target_type=${encodedTargetType}`);
+  }
+  
+  // 将所有参数添加到URL
+  if (params.length > 0) {
+    wsUrl = `${wsUrl}?${params.join('&')}`;
   }
   
   // 设置连接超时
