@@ -8,20 +8,20 @@
         </div>
         <div class="controls-area">
           <el-radio-group v-model="streamType" @change="switchStreamType" class="ctrl-item">
-            <el-radio-button label="local">原始流</el-radio-button>
-            <el-radio-button label="rtmp">RTMP</el-radio-button>
+            <el-radio-button label="raw">原始流</el-radio-button>
+            <el-radio-button label="analyze">分析流</el-radio-button>
           </el-radio-group>
           <el-input v-model="deviceSnQuery" placeholder="输入设备SN查询流" class="ctrl-item" @keyup.enter="queryStreams">
             <template #append>
               <el-button @click="queryStreams">查询</el-button>
             </template>
           </el-input>
-          <el-input v-if="streamType==='rtmp'" v-model="targetType" placeholder="输入要检测的物体" class="ctrl-item" @keyup.enter="handleConnect">
+          <el-input v-if="streamType==='analyze'" v-model="targetType" placeholder="输入要检测的物体" class="ctrl-item" @keyup.enter="handleConnect">
             <template #append>
               <el-button @click="handleConnect" :loading="isConnecting">检测</el-button>
             </template>
           </el-input>
-          <el-input v-if="streamType==='rtmp' && !selectedDeviceId" v-model="rtmpUrl" placeholder="RTMP 地址" class="ctrl-item" @keyup.enter="handleConnect">
+          <el-input v-model="rtmpUrl" placeholder="RTMP 地址" class="ctrl-item" @keyup.enter="handleConnect">
             <template #append>
               <el-button @click="handleConnect" :loading="isConnecting">连接</el-button>
             </template>
@@ -163,7 +163,7 @@ const fetchAllStreams=async()=>{
 
 onMounted(()=>{
   fetchAllStreams()
-  connectLocalVideo()
+  //connectLocalVideo()
 })
 
 const ws = ref(null)
@@ -171,7 +171,7 @@ const isConnected = ref(false)
 const isConnecting = ref(false)
 const imageData = ref(null)
 const streamData = ref(null)
-const streamType = ref('local')
+const streamType = ref('raw')
 const rtmpUrl = ref('')
 const videoBoxRef=ref(null)
 const connectionStatus=computed(()=>isConnecting.value?'连接中':(isConnected.value?'在线':'离线'))
@@ -179,7 +179,7 @@ const statusTagType=computed(()=>isConnecting.value?'warning':(isConnected.value
 
 // 获取加载文本
 const getLoadingText = () => {
-  if (streamType.value === 'rtmp') {
+  if (streamType.value === 'analyze') {
     return '正在连接RTMP流...'
   }
   return '正在连接原始视频流...'
@@ -189,7 +189,7 @@ const getLoadingText = () => {
 const getSourceText = () => {
   if (!streamData.value) return ''
   
-  if (streamType.value === 'local') {
+  if (streamType.value === 'raw') {
     return '原始视频'
   } else {
     return rtmpUrl.value ? '自定义RTMP流' : '默认RTMP流'
@@ -232,7 +232,7 @@ const handleWebSocketMessage = (event) => {
 const handleWebSocketError = (error) => {
   isConnected.value = false
   isConnecting.value = false
-  ElMessage.error(`${streamType.value === 'local' ? '原始视频' : 'RTMP'}流连接错误`)
+  ElMessage.error(`${streamType.value === 'raw' ? '原始视频' : 'analyze'}流连接错误`)
   console.error('WebSocket错误:', error)
   addLog('error','连接错误')
 }
@@ -244,15 +244,15 @@ const handleWebSocketClose = (sourceName, event) => {
   
   if (event && event.code === 1008) {
     ElMessage.error(`${sourceName}连接失败: ${event.reason}`)
-  } else if (streamType.value === 'local' && sourceName === '本地视频流' || 
-            (streamType.value === 'rtmp' && sourceName === 'RTMP流')) {
+  } else if (streamType.value === 'raw' && sourceName === '本地视频流' || 
+            (streamType.value === 'analyze' && sourceName === 'RTMP分析流')) {
     ElMessage.warning(`${sourceName}连接已关闭`)
   }
   addLog('close',`${sourceName}关闭`)
 }
 
 // 连接原始视频WebSocket
-const connectLocalVideo = () => {
+/*const connectLocalVideo = () => {
   closeWebSocket()
   isConnecting.value = true
   imageData.value = null
@@ -303,7 +303,7 @@ const connectLocalVideo = () => {
     console.error('WebSocket创建错误:', error)
     addLog('error','原始视频连接失败')
   }
-}
+}*/
 
 const connectSelectedStream=()=>{
   closeWebSocket()
@@ -317,8 +317,13 @@ const connectSelectedStream=()=>{
     isConnecting.value=false
     return
   }
-  let wsUrl=`ws://localhost:8081/ws/rtmp?rtmp_url=${encodeURIComponent(url)}`
-  
+
+  let wsUrl="";
+  if(streamType.value=='analyze')
+    wsUrl=`ws://localhost:8081/ws/rtmp?rtmp_url=${encodeURIComponent(url)}`
+  else
+    wsUrl=`ws://localhost:8081/ws/rtmp/raw?rtmp_url=${encodeURIComponent(url)}`
+
   // 如果提供了目标类型，则添加为查询参数
   if (targetType.value.trim()) {
     const encodedTargetType = encodeURIComponent(targetType.value.trim())
@@ -337,7 +342,7 @@ const connectSelectedStream=()=>{
     handleWebSocketMessage(event)
   }
   ws.value.onerror=handleWebSocketError
-  ws.value.onclose = (event) => handleWebSocketClose('RTMP流', event)
+  ws.value.onclose = (event) => handleWebSocketClose(streamType.value+'流', event)
   startDataTimeout()
 }
 
@@ -348,7 +353,12 @@ const connectRTMP = () => {
   imageData.value = null
   streamData.value = null
   
-  let wsUrl = 'ws://localhost:8081/ws/rtmp';
+  let wsUrl=null;
+  if(streamType.value=='analyze')
+    wsUrl = 'ws://localhost:8081/ws/rtmp';
+  else
+    wsUrl = 'ws://localhost:8081/ws/rtmp/raw';
+    
   const params = [];
   
   // 如果提供了URL，则添加为查询参数
@@ -442,21 +452,25 @@ const switchStreamType = (type) => {
   streamData.value = null
   isConnected.value = false
   
+  closeWebSocket()
   // 根据类型连接不同的流
-  if (type === 'local') {
-    connectLocalVideo()
-  } else if (type === 'rtmp') {
-    if(selectedStreamId.value){connectSelectedStream()}else{connectRTMP()}
+  if (type === 'raw') {
+    //connectLocalVideo()
+    streamType.value='raw'
+  } else if (type === 'analyze') {
+    //if(selectedStreamId.value){connectSelectedStream()}else{connectRTMP()}
+    streamType.value='analyze'
   }
 }
 
 // 重试当前连接
 const retryConnection = () => {
-  if (streamType.value === 'local') {
+  /*if (streamType.value === 'local') {
     connectLocalVideo()
   } else if (streamType.value === 'rtmp') {
     connectRTMP()
-  }
+  }*/
+  connectRTMP()
 }
 
 // 关闭WebSocket连接
@@ -493,9 +507,13 @@ const selectStream=(s)=>{
   connectSelectedStream()
 }
 const handleConnect=()=>{
-  if(streamType.value==='local'){connectLocalVideo();return}
+  //if(streamType.value==='local'){connectLocalVideo();return}
+  if(rtmpUrl.value.trim()){
+    connectRTMP()
+    selectedStreamId.value=null
+  }
   if(selectedStreamId.value){connectSelectedStream();return}
-  connectRTMP()
+  
 }
 const handleDisconnect=()=>{
   closeWebSocket()
