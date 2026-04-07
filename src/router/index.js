@@ -64,15 +64,7 @@ const router = createRouter({
             roles: ['PUBLIC', 'COMMON', 'INSPECTOR', 'ADMIN']
           }
         },
-        {
-          path: 'analysis',
-          name: 'Analysis',
-          component: () => import('../views/Analysis.vue'),
-          meta: {
-            requiresAuth: true,
-            roles: ['PUBLIC', 'COMMON', 'INSPECTOR', 'ADMIN']
-          }
-        },
+
         {
           path: 'reports',
           name: 'Reports',
@@ -87,7 +79,7 @@ const router = createRouter({
     },
 
     //所有 /admin/xxx 的页面，都需要管理员权限。
-    
+
     {
       path: '/admin',
       component: Layout,
@@ -115,34 +107,32 @@ const router = createRouter({
           }
         },
         {
-          path:'orgnization',
-          name:'Organization',
+          path: 'orgnization',
+          name: 'Organization',
           component: () => import('../views/org/orgnization.vue'),
           meta: {
             requiresAuth: true,
             roles: ['ADMIN']
           }
         },
-      
-          // ⭐️ 新增：device 相关页面
-    {
-      path: 'device',  // /admin/device
-      name: 'DeviceList',
-      component: () => import('../views/admin/device/list.vue'),
-      meta: { requiresAuth: true, roles: ['ADMIN'] }
-    },
-    {
-      path: 'device/detail/:id',  // /admin/device/detail/DEV001
-      name: 'DeviceDetail',
-      component: () => import('../views/admin/device/detail.vue'),
-      meta: { requiresAuth: true, roles: ['ADMIN'] }
-    },
-    {
-      path: 'device/config/:id',  // /admin/device/config/DEV001
-      name: 'DeviceConfig',
-      component: () => import('../views/admin/device/config.vue'),
-      meta: { requiresAuth: true, roles: ['ADMIN'] }
-    }
+        {
+          path: 'device',  // /admin/device
+          name: 'DeviceList',
+          component: () => import('../views/admin/device/list.vue'),
+          meta: { requiresAuth: true, roles: ['ADMIN'] }
+        },
+        {
+          path: 'device/detail/:id',  // /admin/device/detail/DEV001
+          name: 'DeviceDetail',
+          component: () => import('../views/admin/device/detail.vue'),
+          meta: { requiresAuth: true, roles: ['ADMIN'] }
+        },
+        {
+          path: 'device/config/:id',  // /admin/device/config/DEV001
+          name: 'DeviceConfig',
+          component: () => import('../views/admin/device/config.vue'),
+          meta: { requiresAuth: true, roles: ['ADMIN'] }
+        }
       ]
     },
     {
@@ -184,11 +174,11 @@ function parseJwtToken(token) {
 router.beforeEach((to, from) => {
   try {
     console.log('路由守卫触发:', to.path)
-    
+
     // 安全获取token
     const token = localStorage.getItem('token')
     console.log('当前token状态:', token ? '已存在' : '不存在')
-    
+
     // 从token中解析用户信息（支持演示账号）
     let userRole = null
     const DEMO_TOKEN = 'demo-admin-token'
@@ -201,7 +191,7 @@ router.beforeEach((to, from) => {
             try {
               const info = JSON.parse(stored)
               userRole = info.role || 'ADMIN'
-            } catch (e) {}
+            } catch (e) { }
           }
           if (!userRole) userRole = 'ADMIN'
         } else {
@@ -214,7 +204,7 @@ router.beforeEach((to, from) => {
               try {
                 const info = JSON.parse(stored)
                 userRole = info.role ? String(info.role).toUpperCase() : null
-              } catch (e) {}
+              } catch (e) { }
             }
           }
         }
@@ -235,9 +225,9 @@ router.beforeEach((to, from) => {
       }
       return true
     }
-    
+
     // 未登录，且访问/
-    if(!token && to.path === '/') {
+    if (!token && to.path === '/') {
       console.log('未登录，跳转到登录页')
       return '/login'
     }
@@ -271,12 +261,12 @@ router.beforeEach((to, from) => {
       return '/login'
     }
 
-    
+
     // 检查角色权限
     if (to.meta.roles && Array.isArray(to.meta.roles) && !to.meta.roles.includes(userRole)) {
       console.log('用户角色无权限访问该页面')
       ElMessage.error('您没有权限访问该页面')
-      
+
       // 根据角色重定向到合适的页面
       if (userRole === 'PUBLIC' || userRole === 'COMMON') {
         return '/detection'
