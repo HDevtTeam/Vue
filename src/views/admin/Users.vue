@@ -14,8 +14,7 @@
         <el-form-item label="角色">
           <el-select v-model="searchForm.role" placeholder="全部" clearable>
             <el-option label="管理员" value="admin" />
-            <el-option label="巡查员" value="inspector" />
-            <el-option label="普通用户" value="user" />
+            <el-option label="普通用户" value="common" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
@@ -38,8 +37,8 @@
         <el-table-column prop="name" label="用户名" width="150" />
         <el-table-column prop="role" label="角色" width="120">
           <template #default="{ row }">
-            <el-tag :type="row.role === 'admin' ? 'danger' : row.role === 'inspector' ? 'warning' : 'success'">
-              {{ row.role === 'admin' ? '管理员' : row.role === 'inspector' ? '巡查员' : '普通用户' }}
+            <el-tag :type="getRoleTagType(row.role)">
+              {{ getRoleLabel(row.role) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -103,8 +102,7 @@
         <el-form-item label="角色" prop="role">
           <el-select v-model="formData.role" placeholder="请选择角色">
             <el-option label="管理员" value="admin" />
-            <el-option label="巡查员" value="inspector" />
-            <el-option label="普通用户" value="user" />
+            <el-option label="普通用户" value="common" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态" prop="status">
@@ -155,7 +153,7 @@ const formData = ref({
   id: null,
   name: '',
   password: '',
-  role: 'user',
+  role: 'common',
   status: 'normal'
 })
 
@@ -178,6 +176,46 @@ const rules = {
 }
 
 // ==================== 工具函数 ====================
+const normalizeRole = (role) => {
+  const normalized = String(role || '').trim().toLowerCase()
+  if (normalized === 'user' || normalized === 'common') return 'common'
+  if (normalized === 'admin') return 'admin'
+  if (normalized === 'inspector') return 'inspector'
+  return 'common'
+}
+
+const getRoleTagType = (role) => {
+  const normalized = normalizeRole(role)
+  if (normalized === 'admin') return 'danger'
+  if (normalized === 'inspector') return 'warning'
+  return 'success'
+}
+
+const getRoleLabel = (role) => {
+  const normalized = normalizeRole(role)
+  if (normalized === 'admin') return '管理员'
+  if (normalized === 'inspector') return '巡查员'
+  return '普通用户'
+}
+
+const getRoleSubmitCandidates = (role) => {
+  const normalized = normalizeRole(role)
+  const candidates = [normalized]
+  // 后端 RoleEnum 仅接受 [common, admin]，巡查员回落为普通用户
+  if (normalized === 'inspector') candidates.push('common')
+  return [...new Set(candidates.filter(Boolean))]
+}
+
+const getErrorMessage = (error) => {
+  return (
+    error?.response?.data?.msg ||
+    error?.response?.data?.message ||
+    error?.response?.data?.commonResultResponse?.message ||
+    error?.message ||
+    '操作失败'
+  )
+}
+
 const formatDate = (dateStr) => {
   if (!dateStr) return ''
   const date = new Date(dateStr)
@@ -196,7 +234,11 @@ const fetchUserList = async () => {
     console.log('获取用户列表返回：', res)
     
     // 后端返回结构：{ commonResultResponse: {...}, userList: [...] }
-    userList.value = res.userList || res.users || []
+    const rawList = res.userList || res.users || []
+    userList.value = rawList.map(item => ({
+      ...item,
+      role: normalizeRole(item.role)
+    }))
     total.value = userList.value.length
     
   } catch (error) {
@@ -242,7 +284,7 @@ const handleAdd = () => {
     id: null,
     name: '',
     password: '',
-    role: 'user',
+    role: 'common',
     status: 'normal'
   }
   dialogVisible.value = true
@@ -255,7 +297,7 @@ const handleEdit = (row) => {
     id: row.id,
     name: row.name,
     password: '',
-    role: row.role,
+    role: normalizeRole(row.role) || 'common',
     status: row.status
   }
   dialogVisible.value = true
@@ -286,44 +328,50 @@ const handleDelete = (row) => {
 // ==================== 提交表单 ====================
 const submitForm = async () => {
   if (!formRef.value) return
-  
-  await formRef.value.validate(async (valid) => {
-    if (valid) {
-      submitting.value = true
-      try {
-        if (dialogType.value === 'add') {
-          // 新增只需要 name 和 password
-          await addUser({
-            name: formData.value.name,
-            password: formData.value.password
-          })
-          ElMessage.success('新增成功')
-        } else {
-          // 编辑需要完整对象
-          const updateData = {
-            id: formData.value.id,
-            name: formData.value.name,
-            role: formData.value.role,
-            status: formData.value.status
-          }
-          // 如果密码有值，则修改密码
-          if (formData.value.password) {
-            updateData.password = formData.value.password
-          }
-          await updateUser(updateData)
-          ElMessage.success('修改成功')
-        }
-        
-        dialogVisible.value = false
-        fetchUserList()
-      } catch (error) {
-        console.error('操作失败：', error)
-        ElMessage.error('操作失败')
-      } finally {
-        submitting.value = false
+
+  try {
+    await formRef.value.validate()
+  } catch (error) {
+    return
+  }
+
+  submitting.value = true
+  try {
+    if (dialogType.value === 'add') {
+      // 新增只需要 name 和 password
+      await addUser({
+        name: formData.value.name,
+        password: formData.value.password
+      })
+      ElMessage.success('新增成功')
+    } else {
+      // 编辑需要完整对象
+      const baseData = {
+        id: formData.value.id,
+        name: formData.value.name,
+        role: normalizeRole(formData.value.role),
+        status: formData.value.status
       }
+      // 如果密码有值，则修改密码
+      if (formData.value.password) {
+        baseData.password = formData.value.password
+      }
+
+      const roleCandidates = getRoleSubmitCandidates(baseData.role)
+      const payload = { ...baseData, role: roleCandidates[0] || 'common' }
+      await updateUser(baseData.id, payload)
+
+      ElMessage.success('修改成功')
     }
-  })
+
+    dialogVisible.value = false
+    fetchUserList()
+  } catch (error) {
+    console.error('操作失败：', error)
+    ElMessage.error(getErrorMessage(error))
+  } finally {
+    submitting.value = false
+  }
 }
 
 // ==================== 页面加载时获取数据 ====================

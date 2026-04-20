@@ -18,12 +18,14 @@ export const addUser = (data) => {
   })
 }
 
-// 更新用户
-export const updateUser = (data) => {
+// 更新用户（后端接口：PUT /api/users/{id}）
+export const updateUser = (id, data) => {
   return request({
-    url: '/users',
+    url: `/users/${id}`,
     method: 'put',
-    data
+    data: {
+      updateUserInfo: data
+    }
   })
 }
 

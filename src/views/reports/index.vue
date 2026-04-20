@@ -96,7 +96,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
@@ -361,10 +361,22 @@ onMounted(() => {
   handleSearch()
 })
 
-window.addEventListener('resize', () => {
-  echarts.getInstanceByDom(mainChart.value)?.resize()
-  echarts.getInstanceByDom(typeChart.value)?.resize()
-  echarts.getInstanceByDom(levelChart.value)?.resize()
+const handleWindowResize = () => {
+  if (mainChart.value) {
+    echarts.getInstanceByDom(mainChart.value)?.resize()
+  }
+  if (typeChart.value) {
+    echarts.getInstanceByDom(typeChart.value)?.resize()
+  }
+  if (levelChart.value) {
+    echarts.getInstanceByDom(levelChart.value)?.resize()
+  }
+}
+
+window.addEventListener('resize', handleWindowResize)
+
+onUnmounted(() => {
+  window.removeEventListener('resize', handleWindowResize)
 })
 </script>
 

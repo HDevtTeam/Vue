@@ -6,12 +6,12 @@ import {
   Expand,
   User, 
   VideoCamera, 
-  List, 
-  Search, 
-  Document, 
+  Cpu,
   DataLine,
   ArrowRight,
-  Setting
+  Setting,
+  Tools,
+  OfficeBuilding
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import request from '../../utils/request'
@@ -161,77 +161,10 @@ onMounted(() => {
 
 <template>
   <el-container class="layout-container">
-    <!-- 侧边栏 -->
-    <el-aside :width="isCollapse ? '64px' : '200px'" class="aside">
-      <el-menu
-        :default-active="$route.path.substring(1).replace('/', '-')"
-        class="el-menu-vertical"
-        :collapse="isCollapse"
-        @select="handleSelect"
-      >
-        <!-- 巡检员和管理员可见 -->
-        <el-menu-item v-if="['INSPECTOR', 'ADMIN'].includes(userInfo.role)" index="monitor">
-          <el-icon><VideoCamera /></el-icon>
-          <template #title>视频监控</template>
-        </el-menu-item>
-        
-        <!-- 巡检员和管理员可见 -->
-        <el-menu-item v-if="['INSPECTOR', 'ADMIN'].includes(userInfo.role)" index="tasks">
-          <el-icon><List /></el-icon>
-          <template #title>任务管理</template>
-        </el-menu-item>
-        
-        <!-- 所有认证用户可见 -->
-        <el-menu-item index="detection">
-          <el-icon><Search /></el-icon>
-          <template #title>手动检测</template>
-        </el-menu-item>
-        
-      
-        
-        <!-- 所有认证用户可见 -->
-        
-        <!-- 所有认证用户可见 -->
-        <el-menu-item index="reports">
-          <el-icon><DataLine /></el-icon>
-          <template #title>统计报表</template>
-        </el-menu-item>
-      
-        
-        <!-- 管理员菜单 -->
-<el-sub-menu v-if="userInfo.role === 'ADMIN'" index="admin">
-  <template #title>
-    <el-icon><Setting /></el-icon>
-    <span>系统管理</span>
-  </template>
-  <el-menu-item index="admin-users">用户管理</el-menu-item>
-  <el-menu-item index="admin-system">系统配置</el-menu-item>
-  <el-menu-item index="admin-orgnization">组织管理</el-menu-item>
-  <!-- ⭐️ 加上你的设备管理 -->
-
-  <!-- 如果有子菜单还可以加 -->
-  <el-sub-menu index="admin-device">
-    <template #title>设备管理</template>
-    <el-menu-item index="admin-device">设备列表</el-menu-item>
-    
-  </el-sub-menu>
-</el-sub-menu>
-      </el-menu>
-      <!-- 将折叠按钮移到底部 -->
-      <div class="menu-footer">
-        <el-icon class="toggle-button" @click="toggleCollapse">
-          <component :is="isCollapse ? 'Expand' : 'Fold'" />
-        </el-icon>
-      </div>
-    </el-aside>
-
-    <!-- 主要内容区域 -->
-    <el-container>
-      <!-- 顶部导航栏 -->
-      <el-header class="header">
-        <div class="header-left">
-          <h1 class="system-title">无人机检测系统</h1>
-        </div>
+    <!-- 顶部大标题区域 -->
+    <el-header class="top-header">
+      <div class="top-header-inner">
+        <h1 class="system-title">无人机检测系统</h1>
         <div class="header-right">
           <template v-if="isLoggedIn">
             <el-dropdown>
@@ -251,11 +184,68 @@ onMounted(() => {
             <el-button type="primary" size="small" @click="goToLogin">登录</el-button>
           </template>
         </div>
-      </el-header>
+      </div>
+    </el-header>
 
-      <!-- 内容区域 -->
+    <!-- 顶部标题下方：左侧导航 + 右侧内容 -->
+    <el-container class="content-layout">
+      <el-aside :width="isCollapse ? '76px' : '260px'" class="aside">
+        <el-menu
+          :default-active="$route.path.substring(1).replace('/', '-')"
+          class="el-menu-vertical"
+          :collapse="isCollapse"
+          @select="handleSelect"
+        >
+          <!-- 巡检员和管理员可见 -->
+          <el-menu-item v-if="['INSPECTOR', 'ADMIN'].includes(userInfo.role)" index="monitor">
+            <el-icon><VideoCamera /></el-icon>
+            <template #title>视频监控</template>
+          </el-menu-item>
+
+          <!-- 所有用户可见 -->
+          <el-menu-item index="reports">
+            <el-icon><DataLine /></el-icon>
+            <template #title>统计报表</template>
+          </el-menu-item>
+
+          <!-- 所有人可见 -->
+          <el-menu-item index="admin-system">
+            <el-icon><Tools /></el-icon>
+            <template #title>系统配置</template>
+          </el-menu-item>
+
+          <el-menu-item index="admin-device">
+            <el-icon><Cpu /></el-icon>
+            <template #title>设备管理</template>
+          </el-menu-item>
+
+          <!-- 管理员菜单 -->
+          <el-sub-menu v-if="userInfo.role === 'ADMIN'" index="admin">
+            <template #title>
+              <el-icon><Setting /></el-icon>
+              <span>管理员权限</span>
+            </template>
+            <el-menu-item index="admin-users">
+              <el-icon><User /></el-icon>
+              <span>用户管理</span>
+            </el-menu-item>
+            <el-menu-item index="admin-orgnization">
+              <el-icon><OfficeBuilding /></el-icon>
+              <span>组织管理</span>
+            </el-menu-item>
+          </el-sub-menu>
+        </el-menu>
+        <div class="menu-footer">
+          <el-icon class="toggle-button" @click="toggleCollapse">
+            <component :is="isCollapse ? 'Expand' : 'Fold'" />
+          </el-icon>
+        </div>
+      </el-aside>
+
       <el-main class="main">
-        <router-view></router-view>
+        <div class="main-content-card">
+          <router-view></router-view>
+        </div>
       </el-main>
     </el-container>
   </el-container>
@@ -264,68 +254,38 @@ onMounted(() => {
 <style scoped>
 .layout-container {
   height: 100vh;
+  background: #f5f8fc;
 }
 
-.aside {
-  background-color: #c5e8e4;
-  transition: width 0.3s;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+.top-header {
+  height: 72px;
+  padding: 0 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #e6edf5;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
 }
 
-.menu-footer {
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-top: 1px solid #a9e8e5;
-}
-
-.toggle-button {
-  color: #fff;
-  font-size: 20px;
-  cursor: pointer;
-  transition: transform 0.3s;
-}
-
-.toggle-button:hover {
-  transform: scale(1.1);
-}
-
-.el-menu-vertical {
-  border-right: none;
-  flex-grow: 1;
-}
-
-.header {
-  background-color: #fff;
-  border-bottom: 1px solid #e6e6e6;
+.top-header-inner {
+  height: 100%;
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-}
-
-.header-left {
-  flex: 1;
-  display: flex;
   justify-content: center;
 }
 
 .system-title {
   margin: 0;
-  font-size: 24px;
-  color: #ca2c2f;
-  font-weight: bold;
-  font-family: 'Arial Black', 'Arial Bold', Gadget, sans-serif;
-  text-align: center;
+  font-size: 30px;
+  color: #1f2d3d;
+  font-weight: 700;
   letter-spacing: 1px;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .header-right {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
 }
@@ -334,9 +294,11 @@ onMounted(() => {
   display: flex;
   align-items: center;
   cursor: pointer;
-  padding: 0 10px;
-  outline: none !important;
-  border: none !important;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: #f1f6fd;
+  color: #2f3e54;
+  border: 1px solid #e2eaf5;
 }
 
 .user-info .el-icon {
@@ -344,34 +306,158 @@ onMounted(() => {
 }
 
 .arrow-icon {
-  margin-left: 5px;
+  margin-left: 6px;
   font-size: 12px;
 }
 
+.content-layout {
+  height: calc(100vh - 72px);
+  padding: 16px;
+  box-sizing: border-box;
+  gap: 16px;
+}
+
+.aside {
+  background: #ffffff;
+  border: 1px solid #e5ecf5;
+  border-radius: 16px;
+  transition: width 0.3s;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+}
+
+.el-menu-vertical {
+  border-right: none;
+  flex-grow: 1;
+  background: transparent;
+  padding: 10px 8px;
+}
+
+.menu-footer {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-top: 1px solid #e5ecf5;
+}
+
+.toggle-button {
+  color: #55708f;
+  font-size: 20px;
+  cursor: pointer;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.toggle-button:hover {
+  transform: scale(1.08);
+  color: #2f6feb;
+}
+
 .main {
-  background-color: #f0f2f5;
-  padding: 20px;
+  padding: 0;
 }
 
-/* 深度选择器，修改Element Plus的默认样式 */
+.main-content-card {
+  height: 100%;
+  overflow: auto;
+  background: #ffffff;
+  border: 1px solid #e6edf6;
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+
+/* 深度选择器，调整 Element Plus 菜单风格 */
+:deep(.el-menu-item),
+:deep(.el-sub-menu__title) {
+  margin: 6px 6px;
+  min-height: 46px;
+  line-height: 46px;
+  border-radius: 10px;
+  color: #3c4b5d;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+:deep(.el-menu-item:hover),
+:deep(.el-sub-menu__title:hover) {
+  background: #edf4ff;
+  color: #2563eb;
+}
+
+:deep(.el-menu-item.is-active) {
+  color: #ffffff;
+  background: #3b82f6;
+  box-shadow: none;
+}
+
+:deep(.el-sub-menu .el-menu-item) {
+  margin-left: 18px;
+  min-height: 42px;
+  line-height: 42px;
+  font-size: 14px;
+  font-weight: 500;
+  border-left: 2px solid #e6edf5;
+  border-radius: 0 8px 8px 0;
+}
+
+:deep(.el-sub-menu .el-menu-item.is-active) {
+  border-left-color: #3b82f6;
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+:deep(.el-menu-item .el-icon),
+:deep(.el-sub-menu__title .el-icon) {
+  color: inherit;
+}
+
+/* 需求覆盖：菜单尺寸与浅色蓝白主题 */
+.layout-container {
+  background: #f5f7fa;
+}
+
+.aside {
+  background: #ffffff;
+}
+
 :deep(.el-menu) {
-  background-color: #6391c8;
+  background: #ffffff;
 }
 
-:deep(.el-menu-item) {
-  color: #bfcbd9;
+:deep(.el-menu-item),
+:deep(.el-sub-menu__title) {
+  height: 52px;
+  line-height: 52px;
+  font-size: 14px;
+  margin-top: 6px;
 }
 
-:deep(.el-menu-item:hover) {
-  background-color: #263445;
+:deep(.el-menu-item .el-icon),
+:deep(.el-sub-menu__title .el-icon) {
+  font-size: 20px;
+}
+
+:deep(.el-menu-item:hover),
+:deep(.el-sub-menu__title:hover) {
+  background: #ecf5ff;
+  color: #409eff;
 }
 
 :deep(.el-menu-item.is-active) {
   color: #409eff;
-  background-color: #263445;
+  background: #ffffff;
 }
 
-:deep(.el-menu-item .el-icon) {
-  color: inherit;
+:deep(.el-sub-menu .el-menu-item.is-active) {
+  color: #409eff;
+  background: #ffffff;
+  border-left-color: #409eff;
+}
+
+:deep(.el-menu-item-group__title) {
+  font-size: 13px;
+  color: #909399;
 }
 </style>

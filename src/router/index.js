@@ -64,7 +64,6 @@ const router = createRouter({
             roles: ['PUBLIC', 'COMMON', 'INSPECTOR', 'ADMIN']
           }
         },
-
         {
           path: 'reports',
           name: 'Reports',
@@ -85,7 +84,7 @@ const router = createRouter({
       component: Layout,
       meta: {
         requiresAuth: true,
-        roles: ['ADMIN']
+        roles: ['COMMON', 'ADMIN']
       },
       children: [
         {
@@ -103,7 +102,7 @@ const router = createRouter({
           component: () => import('../views/admin/System.vue'),
           meta: {
             requiresAuth: true,
-            roles: ['ADMIN']
+            roles: ['COMMON', 'ADMIN']
           }
         },
         {

@@ -1,7 +1,7 @@
 <template>
   <div class="login-container">
     <div class="login-box">
-      <h2>污水检测系统</h2>
+      <h2>无人机检测系统</h2>
       <el-form
         ref="loginFormRef"
         :model="loginForm"
