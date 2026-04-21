@@ -28,7 +28,6 @@
           </el-input>
         </div>
         <div class="action-area">
-          <el-button type="primary" @click="handleConnect" :loading="isConnecting">开始</el-button>
           <el-button @click="retryConnection" :disabled="isConnecting">重试</el-button>
           <el-button type="danger" @click="handleDisconnect">断开</el-button>
           <el-button type="success" @click="startSelectedStream" :disabled="!selectedStreamId">启动流</el-button>
@@ -593,33 +592,37 @@ const stopSelectedStream=async()=>{
 <style scoped>
 .monitor-page {
   height: 100vh;
-  background: linear-gradient(180deg, #e8eef3 0%, #f2f6f9 100%);
-  padding: 12px;
+  background: #f0f2f5;
+  padding: 8px;
   box-sizing: border-box;
 }
 .full {
   height: 100%;
-  border-radius: 12px;
+  border-radius: 0;
   overflow: hidden;
   background: #fff;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  box-shadow: none;
+  border: 1px solid #dcdfe6;
 }
 .top-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid #ebeef5;
+  padding: 10px 16px;
+  border-bottom: 2px solid #1890ff;
+  background: #fafafa;
 }
 .title-area {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  min-width: 120px;
 }
 .title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #2c3e50;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2329;
+  font-family: 'Microsoft YaHei', sans-serif;
 }
 .status-tag {
   transform: translateY(-1px);
@@ -627,86 +630,101 @@ const stopSelectedStream=async()=>{
 .controls-area {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  flex: 1 1 auto;
+  margin: 0 20px;
+  min-width: 0;
 }
 .ctrl-item {
-  min-width: 220px;
+  min-width: 150px;
+  max-width: 250px;
+  flex: 1;
 }
 .action-area {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 .left-panel {
-  border-right: 1px solid #ebeef5;
-  padding: 12px;
+  border-right: 1px solid #dcdfe6;
+  padding: 10px;
+  background: #fafafa;
 }
 .panel-title {
-  font-size: 14px;
-  color: #606266;
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
   margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e4e7ed;
 }
 .device-list {
-  height: calc(100% - 28px);
+  height: calc(100% - 32px);
 }
 .device-item {
-  padding: 10px 12px;
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
-  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid #dcdfe6;
+  border-radius: 0;
+  margin-bottom: 8px;
   cursor: pointer;
   transition: all .2s;
+  background: #fff;
 }
 .device-item:hover {
-  border-color: #c0c4cc;
+  border-color: #1890ff;
+  background: #ecf5ff;
 }
 .device-item.active {
-  border-color: #409EFF;
+  border-color: #1890ff;
   background: #ecf5ff;
+  border-left: 4px solid #1890ff;
 }
 .device-name {
   font-weight: 600;
-  color: #303133;
+  color: #1f2329;
+  font-size: 13px;
 }
 .device-meta {
-  margin-top: 6px;
+  margin-top: 4px;
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
 }
 .main-panel {
-  padding: 12px;
-  background: #f6f8fb;
+  padding: 10px;
+  background: #fafafa;
 }
 .video-card {
-  background: #111827;
-  border-radius: 12px;
+  background: #000;
+  border-radius: 0;
   overflow: hidden;
-  border: 1px solid #1f2937;
+  border: 1px solid #333;
 }
 .video-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  background: #0b1220;
-  border-bottom: 1px solid #1f2937;
+  padding: 8px 12px;
+  background: #1a1a1a;
+  border-bottom: 1px solid #333;
   color: #e5e7eb;
 }
 .video-title {
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
 }
 .video-ops {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 .video-body {
   position: relative;
-  height: calc(70vh - 80px);
-  min-height: 320px;
+  height: calc(70vh - 60px);
+  min-height: 300px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0b1220;
+  background: #000;
 }
 .video-stream {
   width: 100%;
@@ -722,49 +740,56 @@ const stopSelectedStream=async()=>{
 }
 .video-overlay {
   position: absolute;
-  left: 12px;
-  bottom: 12px;
+  left: 8px;
+  bottom: 8px;
 }
 .kpis {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 .kpi {
-  min-width: 90px;
-  background: rgba(0,0,0,0.55);
-  color: #e5e7eb;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(255,255,255,0.08);
+  min-width: 80px;
+  background: rgba(0,0,0,0.7);
+  color: #fff;
+  padding: 6px 8px;
+  border-radius: 0;
+  border: 1px solid rgba(255,255,255,0.1);
 }
 .kpi-label {
-  font-size: 12px;
-  color: #9ca3af;
+  font-size: 11px;
+  color: #ccc;
 }
 .kpi-value {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
 }
 .info-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-top: 12px;
+  gap: 10px;
+  margin-top: 10px;
 }
 .info-card {
-  height: 220px;
+  height: 200px;
+  border-radius: 0;
+  border: 1px solid #dcdfe6;
+  box-shadow: none;
 }
 .info-title {
   font-weight: 600;
   margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e4e7ed;
+  font-size: 13px;
+  color: #303133;
 }
 .info-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px dashed #ebeef5;
-  font-size: 13px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 12px;
 }
 .info-row:last-child {
   border-bottom: none;
@@ -772,18 +797,25 @@ const stopSelectedStream=async()=>{
 .mono {
   font-family: Consolas, Monaco, monospace;
   color: #606266;
+  font-size: 11px;
 }
 .log-list {
-  height: 160px;
+  height: 150px;
 }
 .log-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 0;
-  font-size: 12px;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 11px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.log-item:last-child {
+  border-bottom: none;
 }
 .log-time {
   color: #909399;
+  font-size: 10px;
+  min-width: 60px;
 }
 </style>

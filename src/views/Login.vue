@@ -81,6 +81,18 @@ console.log('请求参数:', {name: loginForm.name, password: loginForm.password
     await loginFormRef.value.validate()
     loading.value = true
 
+    // 硬编码管理员账号密码验证
+    if (loginForm.name === 'admin' && loginForm.password === 'admin123') {
+      // 管理员登录成功
+      const adminToken = 'admin_token_' + Date.now()
+      localStorage.setItem('token', adminToken)
+      localStorage.setItem('userInfo', JSON.stringify({ role: 'ADMIN', name: 'admin' }))
+      ElMessage.success('管理员登录成功')
+      router.push('/admin/system')
+      loading.value = false
+      return
+    }
+
     const res = await request({
       url: '/login',  // 注意路径是 /api/login
       method: 'post',
