@@ -28,6 +28,7 @@
           </el-input>
         </div>
         <div class="action-area">
+          <el-button type="primary" @click="handleConnect" :loading="isConnecting">开始</el-button>
           <el-button @click="retryConnection" :disabled="isConnecting">重试</el-button>
           <el-button type="danger" @click="handleDisconnect">断开</el-button>
           <el-button type="success" @click="startSelectedStream" :disabled="!selectedStreamId">启动流</el-button>
@@ -60,11 +61,29 @@
               </div>
             </div>
             <div class="video-body" ref="videoBoxRef">
-              <img v-if="imageData" :src="imageData" class="video-stream" />
-              <div v-else class="video-placeholder">
-                <el-empty v-if="!isConnected && isConnecting" :description="getLoadingText()" />
-                <el-empty v-else-if="!isConnected" description="未连接" />
+              
+              <!-- WebRTC 视频（v-if 开头） -->
+              <video 
+                v-if="isWebRTCConnected" 
+                ref="videoElementRef" 
+                autoplay 
+                playsinline 
+                class="video-stream"
+              ></video>
+              
+              <!-- 传统 WebSocket 图片渲染 -->
+              <img v-else-if="imageData" :src="imageData" class="video-stream" />
+              
+              <!-- 连接中状态 -->
+              <div v-else-if="!isConnected && isConnecting" class="video-placeholder">
+                <el-empty :description="getLoadingText()" />
               </div>
+              
+              <!-- 未连接状态（v-else） -->
+              <div v-else class="video-placeholder">
+                <el-empty description="未连接" />
+              </div>
+
               <div class="video-overlay">
                 <div class="kpis">
                   <div class="kpi">
@@ -112,10 +131,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import request from '../utils/request'
 import axios from 'axios'
+
+
 
 const logs=ref([])
 const addLog=(type,message)=>{
@@ -135,7 +156,7 @@ const fetchAllStreams=async()=>{
   try{
     addLog('info','正在同步活跃的RTMP流...')
     // 直接使用axios请求，避免baseURL的影响
-    const res=await axios.get('http://localhost:8081/rtmp/streams', { timeout: 10000 })
+    const res=await axios.get('http://118.145.239.110:5439/rtmp/streams', { timeout: 10000 })
     
     // 处理后端返回的数据格式
     const list = res.data?.streams || []
@@ -175,6 +196,13 @@ const rtmpUrl = ref('')
 const videoBoxRef=ref(null)
 const connectionStatus=computed(()=>isConnecting.value?'连接中':(isConnected.value?'在线':'离线'))
 const statusTagType=computed(()=>isConnecting.value?'warning':(isConnected.value?'success':'danger'))
+// WebRTC 相关变量
+const remoteStream = ref(null)           // 存储 WebRTC 接收的 MediaStream
+const isWebRTCConnected = ref(false)     // 控制 video 元素显示
+const videoElementRef = ref(null)        // video 元素引用
+let pc = null
+let localStream = null
+
 
 // 获取加载文本
 const getLoadingText = () => {
@@ -317,33 +345,33 @@ const connectSelectedStream=()=>{
     return
   }
 
-  let wsUrl="";
-  if(streamType.value=='analyze')
-    wsUrl=`ws://localhost:8081/ws/rtmp?rtmp_url=${encodeURIComponent(url)}`
-  else
-    wsUrl=`ws://localhost:8081/ws/rtmp/raw?rtmp_url=${encodeURIComponent(url)}`
-
-  // 如果提供了目标类型，则添加为查询参数
-  if (targetType.value.trim()) {
-    const encodedTargetType = encodeURIComponent(targetType.value.trim())
-    wsUrl = `${wsUrl}&target_type=${encodedTargetType}`;
-  }
+  // 保存RTMP URL以便在connectWebRTC和connectTraditionalWebSocket中使用
+  rtmpUrl.value = url
   
-  ws.value=new WebSocket(wsUrl)
-
-  ws.value.onopen=()=>{
-    isConnected.value=true
-    isConnecting.value=false
-    addLog('open','设备RTMP已连接')
+  // 优先尝试WebRTC连接
+  if (window.RTCPeerConnection) {
+    connectWebRTC()
+  } else {
+    // 不支持WebRTC，使用传统WebSocket
+    connectTraditionalWebSocket()
   }
-  ws.value.onmessage=(event)=>{
-    resetDataTimeout()
-    handleWebSocketMessage(event)
-  }
-  ws.value.onerror=handleWebSocketError
-  ws.value.onclose = (event) => handleWebSocketClose(streamType.value+'流', event)
-  startDataTimeout()
 }
+
+
+
+// 监听 remoteStream 和 video 元素，自动绑定
+watch(
+  [remoteStream, videoElementRef],
+  ([stream, videoEl]) => {
+    if (stream && videoEl) {
+      videoEl.srcObject = stream;
+      // 确保自动播放
+      videoEl.play().catch(e => console.warn('自动播放失败:', e));
+    }
+  },
+  { immediate: true }
+);
+
 
 // 连接RTMP流
 const connectRTMP = () => {
@@ -352,17 +380,34 @@ const connectRTMP = () => {
   imageData.value = null
   streamData.value = null
   
+  // 优先尝试WebRTC连接
+  if (window.RTCPeerConnection) {
+    connectWebRTC()
+  } else {
+    // 不支持WebRTC，使用传统WebSocket
+    connectTraditionalWebSocket()
+  }
+}
+
+// 使用传统WebSocket连接
+const connectTraditionalWebSocket = () => {
   let wsUrl=null;
   if(streamType.value=='analyze')
-    wsUrl = 'ws://localhost:8081/ws/rtmp';
+    wsUrl = 'ws://118.145.239.110:5439/ws/rtmp';
   else
-    wsUrl = 'ws://localhost:8081/ws/rtmp/raw';
+    wsUrl = 'ws://118.145.239.110:5439/ws/rtmp/raw';
     
   const params = [];
   
+  // 修复RTMP流地址格式，确保有双斜杠
+  let fixedRtmpUrl = rtmpUrl.value.trim();
+  if (fixedRtmpUrl && !fixedRtmpUrl.includes('//live/')) {
+    fixedRtmpUrl = fixedRtmpUrl.replace(/\/live\//, '//live/');
+  }
+  
   // 如果提供了URL，则添加为查询参数
-  if (rtmpUrl.value.trim()) {
-    const encodedUrl = encodeURIComponent(rtmpUrl.value.trim())
+  if (fixedRtmpUrl) {
+    const encodedUrl = encodeURIComponent(fixedRtmpUrl)
     params.push(`rtmp_url=${encodedUrl}`);
   }
   
@@ -376,6 +421,9 @@ const connectRTMP = () => {
   if (params.length > 0) {
     wsUrl = `${wsUrl}?${params.join('&')}`;
   }
+  
+  // 重置WebRTC相关状态
+  closePeerConnection()
   
   // 设置连接超时
   const connectionTimeout = setTimeout(() => {
@@ -393,8 +441,8 @@ const connectRTMP = () => {
       clearTimeout(connectionTimeout)
       isConnected.value = true
       isConnecting.value = false
-     ElMessage.success('RTMP流连接成功')
-      addLog('open','RTMP已连接')
+      ElMessage.success('RTMP流连接成功（传统WebSocket）')
+      addLog('open','RTMP已连接（传统WebSocket）')
       
       // 设置数据接收超时
       startDataTimeout()
@@ -422,6 +470,239 @@ const connectRTMP = () => {
     console.error('WebSocket创建错误:', error)
     addLog('error','RTMP连接失败')
   }
+}
+
+// 使用WebRTC连接
+const connectWebRTC = () => {
+  let wsUrl=null;
+  if(streamType.value=='analyze')
+    wsUrl = 'ws://118.145.239.110:5439/ws/rtmp';
+  else
+    wsUrl = 'ws://118.145.239.110:5439/ws/rtmp/raw';
+    
+  const params = [];
+  
+  // 修复RTMP流地址格式，确保有双斜杠
+  let fixedRtmpUrl = rtmpUrl.value.trim();
+  if (fixedRtmpUrl && !fixedRtmpUrl.includes('//live/')) {
+    fixedRtmpUrl = fixedRtmpUrl.replace(/\/live\//, '//live/');
+  }
+  
+  // 如果提供了URL，则添加为查询参数
+  if (fixedRtmpUrl) {
+    const encodedUrl = encodeURIComponent(fixedRtmpUrl)
+    params.push(`rtmp_url=${encodedUrl}`);
+  }
+  
+  // 如果提供了目标类型，则添加为查询参数
+  if (targetType.value.trim()) {
+    const encodedTargetType = encodeURIComponent(targetType.value.trim())
+    params.push(`target_type=${encodedTargetType}`);
+  }
+  
+  // 将所有参数添加到URL
+  if (params.length > 0) {
+    wsUrl = `${wsUrl}?${params.join('&')}`;
+  }
+  
+  // 设置连接超时
+  const connectionTimeout = setTimeout(() => {
+    if (ws.value && ws.value.readyState !== WebSocket.OPEN) {
+      ElMessage.error('WebRTC连接超时，请检查流地址是否正确')
+      closeWebSocket()
+      isConnecting.value = false
+      // 回退到传统WebSocket
+      connectTraditionalWebSocket()
+    }
+  }, 10000) // 10秒超时
+  
+  try {
+    ws.value = new WebSocket(wsUrl)
+
+    ws.value.onopen = () => {
+      clearTimeout(connectionTimeout)
+      isConnecting.value = true
+      addLog('open','WebRTC连接已建立，正在协商...')
+      
+      // 创建PeerConnection
+      createPeerConnection()
+    }
+
+    ws.value.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        
+        if (data.answer) {
+          // 处理服务器返回的answer
+          handleAnswer(data.answer)
+        } else if (data.candidate) {
+          // 处理ICE候选
+          handleCandidate(data.candidate)
+        } else {
+          // 处理传统WebSocket消息
+          resetDataTimeout()
+          handleWebSocketMessage(event)
+        }
+      } catch (error) {
+        // 处理传统WebSocket消息
+        resetDataTimeout()
+        handleWebSocketMessage(event)
+      }
+    }
+    
+    ws.value.onerror = (error) => {
+      clearTimeout(connectionTimeout)
+      handleWebSocketError(error)
+      // 回退到传统WebSocket
+      connectTraditionalWebSocket()
+    }
+    
+    ws.value.onclose = (event) => {
+      clearTimeout(connectionTimeout)
+      closePeerConnection()
+      handleWebSocketClose('WebRTC流', event)
+      // 如果连接关闭且不是用户主动断开，尝试回退到传统WebSocket
+      if (!event.wasClean) {
+        connectTraditionalWebSocket()
+      }
+    }
+  } catch (error) {
+    clearTimeout(connectionTimeout)
+    ElMessage.error(`WebRTC连接失败: ${error.message}`)
+    isConnecting.value = false
+    console.error('WebSocket创建错误:', error)
+    addLog('error','WebRTC连接失败')
+    // 回退到传统WebSocket
+    connectTraditionalWebSocket()
+  }
+}
+
+// 创建PeerConnection
+const createPeerConnection = () => {
+  try {
+    pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' }
+      ]
+    })
+
+    // 监听ICE候选
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        ws.value.send(JSON.stringify({ candidate: event.candidate }))
+      }
+    }
+
+    // 监听远程轨道
+    pc.ontrack = (event) => {
+      console.log('收到远程轨道:', event.tracks.length, 'tracks')
+      if (event.tracks.length > 0) {
+        // 保存远程流
+        remoteStream.value = event.streams[0];
+        isWebRTCConnected.value = true;
+        
+        // 连接状态更新
+        if (isConnecting.value) {
+          isConnecting.value = false;
+          isConnected.value = true;
+          ElMessage.success('WebRTC视频流连接成功');
+          addLog('open', 'WebRTC视频流连接成功');
+        }
+      }
+    }
+
+    // 监听连接状态变化
+    pc.onconnectionstatechange = () => {
+      console.log('WebRTC连接状态:', pc.connectionState)
+      if (pc.connectionState === 'connected') {
+        isConnected.value = true
+        isConnecting.value = false
+        ElMessage.success('WebRTC连接成功')
+        addLog('open','WebRTC连接成功')
+        startDataTimeout()
+      } else if (pc.connectionState === 'failed') {
+        ElMessage.error('WebRTC连接失败')
+        addLog('error','WebRTC连接失败')
+        closePeerConnection()
+        // 回退到传统WebSocket
+        connectTraditionalWebSocket()
+      }
+    }
+
+    // 创建offer
+    pc.createOffer().then((offer) => {
+      return pc.setLocalDescription(offer)
+    }).then(() => {
+      // 发送offer给服务器
+      ws.value.send(JSON.stringify({ offer: {
+        type: pc.localDescription.type,
+        sdp: pc.localDescription.sdp
+      }}))
+    }).catch((error) => {
+      console.error('创建offer失败:', error)
+      ElMessage.error('WebRTC协商失败')
+      closePeerConnection()
+      // 回退到传统WebSocket
+      connectTraditionalWebSocket()
+    })
+  } catch (error) {
+    console.error('创建PeerConnection失败:', error)
+    ElMessage.error('WebRTC初始化失败')
+    closePeerConnection()
+    // 回退到传统WebSocket
+    connectTraditionalWebSocket()
+  }
+}
+
+// 处理服务器返回的answer
+const handleAnswer = (answer) => {
+  if (pc) {
+    pc.setRemoteDescription(new RTCSessionDescription(answer)).catch((error) => {
+      console.error('设置远程描述失败:', error)
+      ElMessage.error('WebRTC协商失败')
+      closePeerConnection()
+      // 回退到传统WebSocket
+      connectTraditionalWebSocket()
+    })
+  }
+}
+
+// 处理ICE候选
+const handleCandidate = (candidate) => {
+  if (pc && candidate) {
+    pc.addIceCandidate(new RTCIceCandidate(candidate)).catch((error) => {
+      console.error('添加ICE候选失败:', error)
+    })
+  }
+}
+
+// 关闭PeerConnection
+const closePeerConnection = () => {
+  if (pc) {
+    pc.close();
+    pc = null;
+  }
+  
+  // 停止所有 tracks
+  if (remoteStream.value) {
+    remoteStream.value.getTracks().forEach(track => track.stop());
+    remoteStream.value = null;
+  }
+  
+  // 重置状态
+  isWebRTCConnected.value = false;
+  
+  // 清除本地流（如果存在）
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+    localStream = null;
+  }
+  
+  // 传统图像数据也清空
+  imageData.value = null;
+  streamData.value = null;
+  
+  // 不再需要手动操作 DOM，Vue 会自动更新视图
 }
 
 // 数据接收超时处理
@@ -476,6 +757,9 @@ const retryConnection = () => {
 const closeWebSocket = () => {
   // 清除所有超时计时器
   resetDataTimeout()
+  
+  // 关闭PeerConnection
+  closePeerConnection()
   
   if (ws.value) {
     // 移除所有事件监听器
